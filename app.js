@@ -935,7 +935,9 @@ function formatNumber(n) { return n >= 1000 ? (n/1000).toFixed(1)+"k" : String(n
 function bindEvents() {
   // Header
   document.getElementById("cartBtn").addEventListener("click", () => {
-    haptic.light(); renderCartItems(); goToStep("cart"); openOverlay("cartPanel");
+    haptic.light();
+    if (tg?.MainButton) tg.MainButton.hide();
+    renderCartItems(); goToStep("cart"); openOverlay("cartPanel");
   });
   document.getElementById("wishlistBtn").addEventListener("click", () => {
     haptic.light(); renderWishlistItems(); openOverlay("wishlistPanel");
@@ -968,7 +970,7 @@ function bindEvents() {
 
   // Telegram MainButton
   if (isInTelegram && tg?.MainButton) {
-    tg.MainButton.onClick(() => { renderCartItems(); goToStep("cart"); openOverlay("cartPanel"); });
+    tg.MainButton.onClick(() => { tg.MainButton.hide(); renderCartItems(); goToStep("cart"); openOverlay("cartPanel"); });
   }
 
   // Backdrop tap to close

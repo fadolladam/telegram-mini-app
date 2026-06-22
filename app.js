@@ -831,25 +831,17 @@ function checkout() {
     currency: CONFIG.currency,
   };
 
-  // Close cart immediately — prevents cart showing behind confirmation
+  // Close cart and show confirmation immediately — don't wait for GAS
   closeAllOverlays();
+  state.cart = [];
+  persistCart();
+  updateCartCount();
+  renderProducts();
+  syncTelegramMainButton();
+  showConfirmation(order);
 
+  // Fire-and-forget: send order to GAS in background
   const webhookReady = CONFIG.webhookUrl && CONFIG.webhookUrl !== "PASTE_YOUR_APPS_SCRIPT_URL_HERE";
-
-  const afterOrder = (ok) => {
-    if (!ok) { haptic.error(); showToast("⚠️ Could not place order. Please try again.", 3000); return; }
-
-    // Clear cart
-    state.cart = [];
-    persistCart();
-    updateCartCount();
-    renderProducts();
-    syncTelegramMainButton();
-
-    // Show confirmation
-    showConfirmation(order);
-  };
-
   if (webhookReady) {
     // text/plain avoids CORS preflight — Google Apps Script rejects OPTIONS requests
     fetch(CONFIG.webhookUrl, {
@@ -858,11 +850,9 @@ function checkout() {
       body: JSON.stringify(order),
     })
     .then(r => r.json())
-    .then(res => afterOrder(res.ok))
-    .catch(err => { console.warn("Webhook error:", err); afterOrder(true); });
+    .catch(err => console.warn("Webhook error:", err));
   } else {
     console.log("📦 Order (demo mode):", order);
-    setTimeout(() => afterOrder(true), 700);
   }
 
   if (isInTelegram) tg.sendData(JSON.stringify(order));

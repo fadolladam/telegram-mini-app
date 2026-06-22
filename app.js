@@ -860,14 +860,15 @@ function checkout() {
   };
 
   if (webhookReady) {
+    // text/plain avoids CORS preflight — Google Apps Script rejects OPTIONS requests
     fetch(CONFIG.webhookUrl, {
       method: "POST",
-      headers: { "Content-Type":"application/json" },
+      headers: { "Content-Type": "text/plain" },
       body: JSON.stringify(order),
     })
     .then(r => r.json())
     .then(res => afterOrder(res.ok))
-    .catch(err => { console.warn("Webhook error:", err); afterOrder(true); }); // still confirm locally
+    .catch(err => { console.warn("Webhook error:", err); afterOrder(true); });
   } else {
     console.log("📦 Order (demo mode):", order);
     setTimeout(() => afterOrder(true), 700);

@@ -872,19 +872,34 @@ function checkout() {
 // SEARCH & SORT
 // ─────────────────────────────────────────────────────────────────
 function setupSearch() {
-  const input = document.getElementById("searchInput");
-  const clear = document.getElementById("clearSearch");
+  const input  = document.getElementById("searchInput");
+  const clear  = document.getElementById("clearSearch");
+  const cancel = document.getElementById("searchCancel");
   let timer;
+
+  input.addEventListener("focus", () => {
+    cancel.classList.remove("hidden");
+  });
+
   input.addEventListener("input", () => {
     state.searchQuery = input.value.trim();
     clear.classList.toggle("hidden", !state.searchQuery);
     clearTimeout(timer);
     timer = setTimeout(renderProducts, 220);
   });
+
   clear.addEventListener("click", () => {
     input.value = ""; state.searchQuery = "";
     clear.classList.add("hidden");
     input.focus();
+    renderProducts();
+  });
+
+  cancel.addEventListener("click", () => {
+    input.value = ""; state.searchQuery = "";
+    clear.classList.add("hidden");
+    cancel.classList.add("hidden");
+    input.blur();
     renderProducts();
   });
 }
@@ -901,6 +916,8 @@ function resetFilters() {
   state.searchQuery = ""; state.activeCategory = "all";
   document.getElementById("searchInput").value = "";
   document.getElementById("clearSearch").classList.add("hidden");
+  document.getElementById("searchCancel").classList.add("hidden");
+  document.getElementById("searchInput").blur();
   document.querySelectorAll(".cat-chip").forEach(b => b.classList.toggle("active", b.dataset.cat === "all"));
   renderProducts();
 }

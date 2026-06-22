@@ -185,11 +185,34 @@ a { color: var(--accent); text-decoration: none; }
   background: var(--bg);
 }
 
+.search-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .search-wrapper {
   position: relative;
   display: flex;
   align-items: center;
+  flex: 1;
+  min-width: 0;
 }
+
+.search-cancel {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 500;
+  padding: 4px 2px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: opacity var(--transition);
+}
+.search-cancel:active { opacity: 0.6; }
+.search-cancel.hidden { display: none; }
 
 .search-icon {
   position: absolute;

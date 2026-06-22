@@ -105,7 +105,7 @@ function handleBotUpdate(update) {
   const text   = (msg.text || "").trim();
 
   if (text === "/start" || text.startsWith("/start ")) {
-    upsertCustomer({
+    const isNew = upsertCustomer({
       chatId:       from.id,
       firstName:    from.first_name    || "",
       lastName:     from.last_name     || "",
@@ -113,7 +113,8 @@ function handleBotUpdate(update) {
       languageCode: from.language_code || "",
       isPremium:    from.is_premium    || false,
     });
-    sendWelcomeMessage(chatId, from.first_name);
+    // Only send welcome once — on first /start, not on every repeat
+    if (isNew) sendWelcomeMessage(chatId, from.first_name);
   }
 
   // User tapped "Share Phone Number"
@@ -221,20 +222,22 @@ function findCustomerRow(sheet, chatId) {
   return -1;
 }
 
+// Returns true if this is a brand-new customer, false if already existed
 function upsertCustomer(data) {
   const sheet = getCustomersSheet();
   const row   = findCustomerRow(sheet, data.chatId);
   const now   = new Date().toLocaleString();
+  const isNew = row === -1;
 
-  if (row === -1) {
+  if (isNew) {
     sheet.appendRow([
       data.chatId,
-      data.firstName   || "—",
-      data.lastName    || "—",
-      data.username    ? `@${data.username}` : "—",
-      data.phone       || "—",
+      data.firstName    || "—",
+      data.lastName     || "—",
+      data.username     ? `@${data.username}` : "—",
+      data.phone        || "—",
       data.languageCode || "—",
-      data.isPremium   ? "Yes" : "No",
+      data.isPremium    ? "Yes" : "No",
       now,  // First Seen
       now,  // Last Active
       0,    // Total Orders
@@ -247,6 +250,8 @@ function upsertCustomer(data) {
     if (data.languageCode) sheet.getRange(row, 6).setValue(data.languageCode);
     sheet.getRange(row, 9).setValue(now); // Last Active
   }
+
+  return isNew;
 }
 
 function updateCustomerPhone(chatId, phone) {

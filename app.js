@@ -26,8 +26,8 @@ const CONFIG = {
   webhookUrl:            "PASTE_YOUR_APPS_SCRIPT_URL_HERE",
   // Google Sheets CSV URLs — must be published to web first
   // File → Share → Publish to web → Sheet → CSV → Publish
-  sheetsProducts: "https://docs.google.com/spreadsheets/d/1zgYV3RaOvkNQwoRuMzcH0qenizyHpSDK/pub?output=csv&gid=1932103623",
-  sheetsCarousel: "https://docs.google.com/spreadsheets/d/1zgYV3RaOvkNQwoRuMzcH0qenizyHpSDK/pub?output=csv&gid=2040782121",
+  sheetsProducts: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ4QXMPP5Tp89rmnOolgZIZhOHLSteRMVcpeeju0UfH05FHrpyp1y9KezHYpcGlAQ/pub?gid=1932103623&single=true&output=csv",
+  sheetsCarousel: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ4QXMPP5Tp89rmnOolgZIZhOHLSteRMVcpeeju0UfH05FHrpyp1y9KezHYpcGlAQ/pub?gid=2040782121&single=true&output=csv",
 };
 
 // ─────────────────────────────────────────────────────────────────

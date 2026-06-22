@@ -1,19 +1,21 @@
 # TG Store — Telegram Mini App Shopping Storefront
 
 A complete, production-ready Telegram Mini App shopping storefront.
-Built with plain HTML, CSS, and JavaScript. No frameworks, no build step.
-Deploys instantly to Vercel and connects to Google Sheets + Telegram notifications.
+Plain HTML, CSS, JavaScript — no frameworks, no build step.
+Products and banners load live from **Google Sheets**. Orders are saved to Google Sheets and sent as Telegram notifications to both seller and buyer.
 
 ---
 
-## What This App Does
+## What's New in v3
 
-- Displays products inside Telegram as a Mini App
-- Buyers can browse, search, filter, add to cart, and checkout
-- Every order is saved automatically to **Google Sheets**
-- **Seller** receives a Telegram notification for every new order
-- **Buyer** receives a Telegram confirmation after checkout
-- Cart and wishlist are saved locally (localStorage) across sessions
+- ✅ **Products load from Google Sheets** (live data, no code changes needed to update products)
+- ✅ **Real product images** from image URLs stored in the sheet (emoji fallback if image fails)
+- ✅ **Out-of-stock overlay** on product cards — disabled Add to Cart button
+- ✅ **Stock-limited quantity** — can't order more than what's in stock
+- ✅ **2-step checkout** — Cart review → Delivery address form → Order placed
+- ✅ **Order confirmation screen** — full success overlay with order summary
+- ✅ **Delivery address** included in order: sent to Google Sheet + Telegram notifications
+- ✅ **Skeleton loading** — smooth placeholder while products load from Sheets
 
 ---
 
@@ -21,257 +23,223 @@ Deploys instantly to Vercel and connects to Google Sheets + Telegram notificatio
 
 ```
 telegram-mini-app/
-├── index.html               # Full HTML structure
-├── style.css                # All styling — light/dark, responsive, animations
-├── app.js                   # All logic — products, cart, checkout, Telegram SDK
-├── google-apps-script.js    # Copy this into Google Apps Script (free backend)
+├── index.html               # Full HTML — header, search, carousel, grid, modals, address form, confirmation
+├── style.css                # All CSS — light/dark, responsive, images, OOS, address form, confirmation
+├── app.js                   # All logic — Sheets fetch, cart, wishlist, checkout, Telegram SDK
+├── google-apps-script.js    # Paste into Google Apps Script (free order webhook)
 ├── vercel.json              # Vercel static deployment config
 └── README.md                # This file
 ```
 
 ---
 
-## Google Sheets (Already Created)
+## Google Sheets (Your Data Store)
 
-Three Google Sheets have been created in your Google Drive:
+### Sheet 1 — Products (with Images)
+**Link:** https://docs.google.com/spreadsheets/d/13HX-BruHcd6k8_tqjL1mxtKdAp1bxSeOXxDPyJW5iVI/edit
 
-| Sheet | Purpose | Link |
-|---|---|---|
-| **TG Store — Products & Carousel** | All 15 products with full details | [Open Sheet](https://docs.google.com/spreadsheets/d/1uWnvxJ9mN2fbjUsQ3BWtqn349_6I_gthaLO3CtfLr4o/edit) |
-| **TG Store — Carousel Banners** | 3 promotional banners with colors | [Open Sheet](https://docs.google.com/spreadsheets/d/1FVICVmyye8I6dehA2HF2Y4r2jOEJ2FVXYBtqONzwrmA/edit) |
-| **TG Store — Orders** | Every order is recorded here automatically | [Open Sheet](https://docs.google.com/spreadsheets/d/1eF9ISo5-rZpkMABFESpiPQzrB8qCs4KKlX3wI16rpTA/edit) |
-
-### Products Sheet Columns
 | Column | Description |
 |---|---|
-| id | Unique product ID |
+| id | Unique number (1, 2, 3…) |
 | name | Product name |
 | category | phones / electronics / fashion / beauty / accessories / food |
-| price | Current selling price |
-| oldPrice | Original price (leave empty if no discount) |
+| price | Selling price (e.g. 24.99) |
+| oldPrice | Original price — leave empty if no discount |
 | rating | Star rating (e.g. 4.8) |
 | reviews | Number of reviews |
 | description | Full product description |
-| stock | Number of items in stock |
-| badge | Label shown on card: Sale / Hot / New (leave empty for none) |
-| emoji | Product emoji icon (e.g. 📱) |
-| color | Hex color for card gradient (e.g. #667eea) |
+| stock | Quantity in stock — set 0 to show "Out of Stock" |
+| badge | Sale / Hot / New — leave empty for none |
+| emoji | Fallback emoji if image fails (e.g. 📱) |
+| color1 | Card gradient start color (hex, e.g. #667eea) |
+| color2 | Card gradient end color (hex, e.g. #764ba2) |
 | isNew | TRUE or FALSE |
+| **imageUrl** | **Full URL to product photo — paste any public image link** |
 
-### Carousel Banners Sheet Columns
+> **To add your own product photos:**
+> Upload your image to Google Drive → right-click → Share → Anyone with link can view → Copy link
+> Convert Drive link: `https://drive.google.com/file/d/FILE_ID/view` → `https://drive.google.com/uc?id=FILE_ID`
+> Paste that URL into the `imageUrl` column.
+> Or use any public image URL (Unsplash, your own host, etc.)
+
+### Sheet 2 — Carousel Banners
+**Link:** https://docs.google.com/spreadsheets/d/1FVICVmyye8I6dehA2HF2Y4r2jOEJ2FVXYBtqONzwrmA/edit
+
 | Column | Description |
 |---|---|
-| id | Unique banner ID (b1, b2, b3) |
-| label | Small top label (e.g. "Just Arrived") |
-| title | Main banner headline |
-| subtitle | Short supporting text |
+| id | b1, b2, b3 |
+| label | Small top tag (e.g. "Just Arrived") |
+| title | Main headline |
+| subtitle | Supporting text |
 | cta | Button label (e.g. "Shop Now") |
-| emoji | Large decorative emoji |
-| color1 | Gradient start color (hex) |
-| color2 | Gradient end color (hex) |
-| category | Which category to open when tapped (all / sale / new / phones etc.) |
+| emoji | Decorative emoji |
+| color1 | Gradient start color |
+| color2 | Gradient end color |
+| category | Category to filter when tapped (all / phones / fashion…) |
 
-### Orders Sheet Columns (auto-filled on every purchase)
-| Column | Description |
+### Sheet 3 — Orders (auto-filled on every purchase)
+**Link:** https://docs.google.com/spreadsheets/d/1eF9ISo5-rZpkMABFESpiPQzrB8qCs4KKlX3wI16rpTA/edit
+
+| Column | Auto-filled with |
 |---|---|
-| Order ID | Unique order reference (e.g. ORD-1719123456789) |
-| Timestamp | Date and time of order (ISO format) |
-| Buyer Name | Telegram first + last name |
-| Username | Telegram @username |
+| Order ID | Unique ID (e.g. ORD-1719123456789) |
+| Timestamp | Date and time of purchase |
+| Buyer Name | Telegram name or address form name |
+| Username | @username if available |
 | Telegram ID | Buyer's numeric Telegram user ID |
-| Items | All products, quantities, and line totals |
-| Subtotal | Order subtotal before delivery |
-| Delivery | Delivery fee ($3.99 or FREE over $50) |
-| Total | Final amount paid |
+| Phone | From delivery address form |
+| Address | Street address |
+| City | City |
+| Country | Country |
+| Delivery Notes | Optional notes from buyer |
+| Items | All products, quantities, and prices |
+| Subtotal | Before delivery |
+| Delivery | Fee (or FREE if over $50) |
+| Total | Final amount |
 | Currency | $ |
-| Status | New (can be updated manually to Processing / Shipped / Done) |
+| Status | "New" — update manually to Processing / Shipped / Done |
 
 ---
 
-## Step 1 — Run Locally
+## Setup Guide
 
-No build step needed:
+### Step 1 — Publish Sheets to Web (Required for live data)
+
+The app fetches product and banner data from Google Sheets via a public CSV URL.
+You must publish each sheet first:
+
+1. Open **TG Store — Products (with Images)** → File → Share → **Publish to web**
+2. Select **Sheet1** → Format: **CSV** → Click **Publish** → confirm
+3. Repeat for **TG Store — Carousel Banners**
+
+> After publishing, the app will load live data from your sheets every time it opens.
+> If not published yet, the app uses built-in fallback data automatically — nothing breaks.
+
+---
+
+### Step 2 — Run Locally
 
 ```bash
-# Open directly in browser
 open index.html
-
-# Or serve with a local static server (recommended)
+# or serve with a local server:
 npx serve .
-# then visit http://localhost:3000
+# visit http://localhost:3000
 ```
-
-> All features work in a regular browser. The Telegram SDK gracefully falls back when opened outside Telegram.
 
 ---
 
-## Step 2 — Push to GitHub
+### Step 3 — Push to GitHub
 
 ```bash
 git init
 git add .
 git commit -m "Initial commit: TG Store Mini App"
 git remote add origin https://github.com/fadolladam/telegram-mini-app.git
-git branch -M main
 git push -u origin main
 ```
 
-Your repo: **https://github.com/fadolladam/telegram-mini-app**
-
 ---
 
-## Step 3 — Deploy to Vercel
+### Step 4 — Deploy to Vercel
 
-### Option A — Vercel Dashboard (Recommended)
 1. Go to [vercel.com/new](https://vercel.com/new)
-2. Click **Import** → select `fadolladam/telegram-mini-app`
-3. Framework preset: **Other** (leave everything as default)
-4. Click **Deploy**
-5. Wait ~30 seconds → you get a live HTTPS URL like:
-   ```
-   https://telegram-mini-app-abc123.vercel.app
-   ```
-
-### Option B — Vercel CLI
-```bash
-npm install -g vercel
-vercel
-# Follow prompts — choose "no framework"
-```
+2. Import `fadolladam/telegram-mini-app`
+3. Framework: **Other** — leave everything default
+4. Click **Deploy** — done in ~30 seconds
+5. Get your HTTPS URL: `https://telegram-mini-app-xxx.vercel.app`
 
 ---
 
-## Step 4 — Set Up Google Apps Script (Free Backend)
+### Step 5 — Set Up Google Apps Script (Order Webhook)
 
-This handles saving orders to Google Sheets and sending Telegram notifications.
+This script receives orders, saves them to the Orders sheet, and sends Telegram messages.
 
-### 4.1 — Create the Script
+#### 5.1 Create the script
+1. Go to [script.google.com](https://script.google.com) → **New Project**
+2. Rename project to **TG Store Webhook**
+3. Delete all default code
+4. Copy the contents of `google-apps-script.js` from this repo and paste it
 
-1. Go to [script.google.com](https://script.google.com)
-2. Click **New Project**
-3. Delete all default code in the editor
-4. Open `google-apps-script.js` from this repo
-5. Copy the entire contents and paste it into the editor
-6. Click the project title (top left, says "Untitled project") and rename it to **TG Store Webhook**
-
-### 4.2 — Add Your Bot Token
-
-In the script, find this line near the top:
-
+#### 5.2 Add your bot token
+Find this line near the top:
 ```js
 const BOT_TOKEN = "PASTE_YOUR_BOT_TOKEN_HERE";
 ```
-
-Replace `PASTE_YOUR_BOT_TOKEN_HERE` with your actual bot token from [@BotFather](https://t.me/BotFather).
-
-Example:
+Replace with your actual bot token from [@BotFather](https://t.me/BotFather):
 ```js
 const BOT_TOKEN = "7123456789:AAHdqTcvCH1vGWJxfSeofShs0K8YLMmYWA";
 ```
 
-### 4.3 — Deploy as Web App
+#### 5.3 Deploy as Web App
+1. Click **Deploy** → **New Deployment**
+2. Click the gear icon → select **Web App**
+3. Settings:
+   - **Execute as:** Me
+   - **Who has access:** Anyone
+4. Click **Deploy** → **Authorize access** → choose your Google account → Allow
+5. Copy the **Web App URL** (looks like `https://script.google.com/macros/s/AKfy.../exec`)
 
-1. Click **Deploy** (top right) → **New Deployment**
-2. Click the gear icon next to **Type** → select **Web App**
-3. Fill in:
-   - Description: `TG Store Webhook`
-   - Execute as: **Me**
-   - Who has access: **Anyone**
-4. Click **Deploy**
-5. Click **Authorize access** → choose your Google account → Allow
-6. Copy the **Web App URL** — it looks like:
-   ```
-   https://script.google.com/macros/s/AKfy.../exec
-   ```
-
-### 4.4 — Add the Webhook URL to app.js
-
-Open `app.js` and find this line near the top:
-
+#### 5.4 Add the webhook URL to app.js
+Open `app.js`, find:
 ```js
 webhookUrl: "PASTE_YOUR_APPS_SCRIPT_URL_HERE",
 ```
-
-Replace it with your Web App URL:
-
+Replace with your URL:
 ```js
 webhookUrl: "https://script.google.com/macros/s/AKfy.../exec",
 ```
-
-Save the file, then push to GitHub:
-
-```bash
-git add app.js
-git commit -m "Add Apps Script webhook URL"
-git push
-```
-
-Vercel will auto-redeploy within seconds.
+Then push to GitHub — Vercel auto-redeploys.
 
 ---
 
-## Step 5 — Register Yourself as Seller (One Time Only)
+### Step 6 — Register Yourself as Seller (One Time)
 
-This auto-saves your Telegram chat ID so you receive order notifications.
-
-1. Open Telegram → find your bot → send it `/start`
-2. Open your browser and visit:
+1. Open Telegram → find your bot → send `/start`
+2. Open this URL in your browser:
    ```
    https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec?setup=true
    ```
-   *(Replace with your actual Web App URL and add `?setup=true` at the end)*
-3. You will see: **✅ Seller registered! Your Chat ID has been saved.**
-4. Done — you will now receive a Telegram message for every new order.
+3. You will see: **✅ Seller registered!** — your chat ID is saved
+4. Done — you will now receive a Telegram message for every new order
 
 ---
 
-## Step 6 — Connect to BotFather
+### Step 7 — Connect to BotFather
 
-1. Open [@BotFather](https://t.me/BotFather) in Telegram
+1. Open [@BotFather](https://t.me/BotFather)
 2. Send `/mybots` → select your bot
-3. Go to **Bot Settings** → **Menu Button** → **Configure menu button**
-4. Paste your Vercel HTTPS URL
-5. Set a button label, e.g. `🛍️ Shop Now`
-
-Now anyone who opens your bot will see the store as a Mini App.
+3. **Bot Settings** → **Menu Button** → **Configure menu button**
+4. Paste your Vercel URL
+5. Set label: `🛍️ Shop Now`
 
 ---
 
-## How Orders Work (Full Flow)
+## Checkout Flow (End to End)
 
 ```
-User taps "Checkout" in the Mini App
+User taps "Continue to Delivery"
          │
          ▼
-app.js builds order object:
-  - orderId, timestamp
-  - customer (Telegram name, username, ID)
-  - items (name, qty, price, lineTotal)
-  - subtotal, delivery, total
+Delivery Address Form
+  Full Name · Phone · Address · City · Country · Notes
          │
-         ▼
-POST → Google Apps Script Web App
+         ▼ "Place Order"
          │
-         ├──▶ Saves new row to Orders Google Sheet
+app.js validates form → builds order object
          │
-         ├──▶ Sends Telegram message to SELLER:
-         │      🛍️ New Order Received!
-         │      Buyer: John Doe (@johndoe)
-         │      Items: iPhone Case x1 ($24.99)
-         │      Total: $28.98
+         ├──▶ POST to Google Apps Script
+         │        ├── Saves row to Orders Google Sheet
+         │        ├── Sends Telegram to SELLER (with address + items)
+         │        └── Sends Telegram to BUYER (confirmation)
          │
-         └──▶ Sends Telegram message to BUYER:
-                ✅ Order Confirmed!
-                Hi John! Your order has been placed.
-                Order ID: ORD-1719123456789
-                Total: $28.98
+         ├──▶ tg.sendData() if inside Telegram
+         │
+         └──▶ Shows Order Confirmation overlay ✅
 ```
 
 ---
 
-## Seller Notification Example
-
-When a buyer places an order, you receive this in Telegram:
+## Seller Notification (what you receive in Telegram)
 
 ```
 🛍️ New Order Received!
@@ -281,11 +249,15 @@ When a buyer places an order, you receive this in Telegram:
 
 👤 Buyer: John Doe
 💬 Telegram: @johndoe
-🔢 User ID: 123456789
+📞 Phone: +1 555 000 0000
+
+📍 Ship to:
+  123 Main Street, Apt 4B, New York, United States
+📝 Notes: Please leave at the door
 
 🧾 Items:
-  • iPhone 15 Pro Leather Case × 1 → $24.99
-  • Matcha Latte Starter Kit × 2 → $49.98
+  • iPhone 15 Pro Leather Case × 1  →  $24.99
+  • Matcha Latte Starter Kit × 2    →  $49.98
 
 💰 Subtotal: $74.97
 🚚 Delivery: FREE 🎉
@@ -294,9 +266,7 @@ When a buyer places an order, you receive this in Telegram:
 
 ---
 
-## Buyer Confirmation Example
-
-The buyer receives this in Telegram after checkout:
+## Buyer Confirmation (what the buyer receives)
 
 ```
 ✅ Order Confirmed!
@@ -309,51 +279,68 @@ Hi John! Your order has been placed successfully.
   • iPhone 15 Pro Leather Case × 1
   • Matcha Latte Starter Kit × 2
 
-💰 Total Paid: $74.97
+💰 Total: $74.97
 🚚 Delivery: FREE 🎉
+
+📍 Delivering to: 123 Main Street, New York, United States
 
 We will process your order shortly. Thank you for shopping with us! 🛍️
 ```
 
 ---
 
-## App Features Summary
+## How to Update Products (No Code Needed)
+
+1. Open the **Products (with Images)** Google Sheet
+2. Edit any row — change price, stock, name, image URL, etc.
+3. Add a new row for a new product
+4. Set `stock` to `0` to show "Out of Stock" on the card
+5. The app picks up changes the next time it's opened — no deployment needed
+
+> **To use your own product images:**
+> Upload photo to Google Drive → Share as "Anyone with link" → Copy link
+> Change: `https://drive.google.com/file/d/ID/view` → `https://drive.google.com/uc?id=ID`
+> Paste the `uc?id=` URL into the `imageUrl` column
+
+---
+
+## App Features
 
 | Feature | Details |
 |---|---|
+| Data source | Google Sheets CSV (live, no code changes needed) |
 | Products | 15 products across 6 categories |
+| Real images | From `imageUrl` column — emoji fallback if image fails or missing |
+| Out of Stock | Card overlay, disabled button — set stock=0 in sheet |
+| Stock limit | Can't add more to cart than stock allows |
 | Search | Live search by name, category, description |
-| Filter | 7 category chips (All, Phones, Electronics, Fashion, Beauty, Accessories, Food) |
+| Categories | 7 chips — All, Phones, Electronics, Fashion, Beauty, Accessories, Food |
 | Sort | Popular / Price Low→High / Price High→Low / Newest |
-| Banner Carousel | 3 banners, auto-slide every 4.5s, tap to filter |
-| Product Modal | Full details, quantity selector, stock status |
+| Carousel | 3 banners, auto-slide, tap to filter — data from Sheets |
+| Product Modal | Full details, qty selector (max = stock), stock status |
 | Cart | Add/remove/update qty, subtotal + delivery + total |
-| Wishlist | Save/remove favorites, persists across sessions |
-| Free Delivery | Automatically applied on orders over $50 |
+| Checkout Step 1 | Cart review with subtotal |
+| Checkout Step 2 | Delivery address form (name, phone, address, city, country, notes) |
+| Order Confirmation | Full overlay with order summary after successful checkout |
+| Wishlist | Save/remove favorites, persists in localStorage |
+| Free Delivery | Auto-applied on orders over $50 |
 | LocalStorage | Cart and wishlist survive page refresh |
-| Dark / Light Mode | Auto-detects from Telegram theme |
-| Haptic Feedback | On add to cart, wishlist, checkout |
-| Telegram MainButton | Shows total and item count when cart is not empty |
+| Telegram Theme | Auto light/dark from Telegram |
+| Haptic Feedback | On add to cart, wishlist, checkout, errors |
+| Notifications | Seller + buyer both get Telegram messages on every order |
+| Orders Sheet | Every order auto-saved with full address and item details |
 
 ---
 
-## What to Improve Later (with a Backend)
+## What to Build Next
 
-| Current | Future upgrade |
+| Feature | How |
 |---|---|
-| Products hardcoded in `app.js` | Fetch from Google Sheets API or Supabase |
-| No user accounts | Firebase Auth / Supabase Auth |
-| No real payment | Stripe, Telegram Stars, or TON payments |
-| Manual order status updates | Admin dashboard to update order status |
-| No stock tracking | Real-time inventory updates |
-| Single store | Multi-vendor marketplace |
-
----
-
-## Telegram Mini App Resources
-
-- [Official Mini App docs](https://core.telegram.org/bots/webapps)
-- [Telegram WebApp JS reference](https://core.telegram.org/bots/webapps#initializing-mini-apps)
-- [BotFather](https://t.me/BotFather)
-- [Telegram Bot API — web_app_data](https://core.telegram.org/bots/api#message)
-- [Google Apps Script docs](https://developers.google.com/apps-script)
+| Payment | Telegram Stars, Stripe, or TON |
+| Real stock tracking | Sheets formula to decrement on order |
+| Admin panel | Google Sheets itself — update Status column |
+| Order history for buyer | Store orders in localStorage or Firestore |
+| Size / color variants | Add `variants` column to Products sheet |
+| Promo codes | Add Codes sheet, validate in Apps Script |
+| Push notifications | Telegram bot scheduled messages |
+| Analytics | Apps Script writes views/cart events to a Stats sheet |

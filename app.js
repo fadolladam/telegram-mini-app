@@ -1,314 +1,85 @@
 /* ═══════════════════════════════════════════════════════════════════
-   TG STORE — app.js
-   Plain ES6, no dependencies. Connects to Telegram WebApp SDK.
-   Designed to be easily replaced with Firebase / Supabase / REST API.
+   TG STORE — app.js  (v3)
+   - Loads products & banners from Google Sheets (CSV)
+   - Real product images with emoji fallback
+   - Out-of-stock card overlay + disabled button
+   - Stock-limited quantity selector
+   - 2-step checkout: Cart → Delivery address form
+   - Order confirmation overlay
+   - Orders saved to Google Sheets + Telegram notifications
 ═══════════════════════════════════════════════════════════════════ */
 
 "use strict";
 
 // ─────────────────────────────────────────────────────────────────
-// CONFIG  (easy to swap per deployment)
+// CONFIG
 // ─────────────────────────────────────────────────────────────────
 const CONFIG = {
   storeName:             "TG Store",
-  storeTagline:          "Premium Mobile Shopping",
   currency:              "$",
   deliveryFee:           3.99,
-  freeDeliveryThreshold: 50,      // free delivery above this subtotal
-  carouselInterval:      4500,    // ms between auto-slides
+  freeDeliveryThreshold: 50,
+  carouselInterval:      4500,
   localStorageCartKey:   "tgstore_cart_v1",
   localStorageWishKey:   "tgstore_wish_v1",
-  // Paste your Google Apps Script Web App URL here after deploying
+  // Your Google Apps Script Web App URL (paste after deploying)
   webhookUrl:            "PASTE_YOUR_APPS_SCRIPT_URL_HERE",
+  // Google Sheets CSV URLs — must be published to web first
+  // File → Share → Publish to web → Sheet → CSV → Publish
+  sheetsProducts: "https://docs.google.com/spreadsheets/d/13HX-BruHcd6k8_tqjL1mxtKdAp1bxSeOXxDPyJW5iVI/pub?output=csv",
+  sheetsCarousel: "https://docs.google.com/spreadsheets/d/1FVICVmyye8I6dehA2HF2Y4r2jOEJ2FVXYBtqONzwrmA/pub?output=csv",
 };
 
 // ─────────────────────────────────────────────────────────────────
-// BANNER DATA
+// FALLBACK DATA (used when Sheets not yet published to web)
 // ─────────────────────────────────────────────────────────────────
-const BANNERS = [
-  {
-    id:       "b1",
-    label:    "Just Arrived",
-    title:    "New Arrivals\nThis Week",
-    subtitle: "Fresh styles, latest tech",
-    cta:      "Shop Now",
-    emoji:    "🆕",
-    gradient: ["#667eea", "#764ba2"],
-    category: "new",
-  },
-  {
-    id:       "b2",
-    label:    "Limited Time",
-    title:    "Up to 40% Off\nSelected Items",
-    subtitle: "While stocks last",
-    cta:      "See Deals",
-    emoji:    "🔥",
-    gradient: ["#f093fb", "#f5576c"],
-    category: "sale",
-  },
-  {
-    id:       "b3",
-    label:    "Best Sellers",
-    title:    "Free Delivery\nOver $50",
-    subtitle: "On all qualifying orders",
-    cta:      "Explore",
-    emoji:    "🚀",
-    gradient: ["#4facfe", "#00f2fe"],
-    category: "all",
-  },
+const FALLBACK_BANNERS = [
+  { id:"b1", label:"Just Arrived",  title:"New Arrivals\nThis Week",       subtitle:"Fresh styles and latest tech",   cta:"Shop Now",  emoji:"🆕", gradient:["#667eea","#764ba2"], category:"all"  },
+  { id:"b2", label:"Limited Time",  title:"Up to 40% Off\nSelected Items", subtitle:"While stocks last",              cta:"See Deals", emoji:"🔥", gradient:["#f093fb","#f5576c"], category:"all"  },
+  { id:"b3", label:"Best Sellers",  title:"Free Delivery\nOver $50",       subtitle:"On all qualifying orders",       cta:"Explore",   emoji:"🚀", gradient:["#4facfe","#00f2fe"], category:"all"  },
+];
+
+const FALLBACK_PRODUCTS = [
+  { id:1,  name:"iPhone 15 Pro Leather Case",    category:"phones",      price:24.99,  oldPrice:39.99,  rating:4.8, reviews:312,  stock:15, badge:"Sale", emoji:"📱", gradient:["#667eea","#764ba2"], isNew:false, imageUrl:"https://images.unsplash.com/photo-1601784551446-20c9e07cdbdb?w=400&q=80", description:"Premium full-grain leather with MagSafe compatibility. Military-grade drop protection with a slim profile." },
+  { id:2,  name:"AirPods Pro 2nd Gen",           category:"electronics", price:189.99, oldPrice:249.99, rating:4.9, reviews:1204, stock:8,  badge:"Hot",  emoji:"🎧", gradient:["#f093fb","#f5576c"], isNew:false, imageUrl:"https://images.unsplash.com/photo-1588423771073-b8903fead714?w=400&q=80", description:"Active noise cancellation, transparency mode, and spatial audio. 6h listening time." },
+  { id:3,  name:"Nike Air Max 2025",             category:"fashion",     price:129.99, oldPrice:null,   rating:4.7, reviews:89,   stock:22, badge:"New",  emoji:"👟", gradient:["#43e97b","#38f9d7"], isNew:true,  imageUrl:"https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400&q=80", description:"Lightweight mesh upper with responsive Air cushioning. Built for all-day comfort." },
+  { id:4,  name:"Vitamin C Brightening Serum",   category:"beauty",      price:34.99,  oldPrice:49.99,  rating:4.6, reviews:567,  stock:40, badge:"Sale", emoji:"🌟", gradient:["#fa709a","#fee140"], isNew:false, imageUrl:"https://images.unsplash.com/photo-1556228578-8c89e6adf883?w=400&q=80", description:"15% stabilized Vitamin C, hyaluronic acid, and niacinamide." },
+  { id:5,  name:"Gold Link Chain Necklace",      category:"accessories", price:45.99,  oldPrice:null,   rating:4.5, reviews:143,  stock:30, badge:"New",  emoji:"📿", gradient:["#f6d365","#fda085"], isNew:true,  imageUrl:"https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=400&q=80", description:"18k gold-plated stainless steel link chain. Tarnish-resistant and waterproof." },
+  { id:6,  name:"Sushi Premium Bento Box",       category:"food",        price:18.99,  oldPrice:null,   rating:4.8, reviews:421,  stock:50, badge:"Hot",  emoji:"🍱", gradient:["#a18cd1","#fbc2eb"], isNew:false, imageUrl:"https://images.unsplash.com/photo-1579871494447-9811cf80d66c?w=400&q=80", description:"12-piece premium sushi selection. Freshly prepared and delivered same day." },
+  { id:7,  name:"Samsung Galaxy S24 Ultra",      category:"phones",      price:899.99, oldPrice:1099.99,rating:4.8, reviews:2341, stock:0,  badge:"Hot",  emoji:"🤳", gradient:["#0f0c29","#302b63"], isNew:false, imageUrl:"https://images.unsplash.com/photo-1610945415295-d9bbf067e59c?w=400&q=80", description:"6.8\" QHD+ Dynamic AMOLED, 200MP camera, built-in S Pen." },
+  { id:8,  name:"Smart Watch Pro 9",             category:"electronics", price:299.99, oldPrice:399.99, rating:4.7, reviews:876,  stock:12, badge:"Sale", emoji:"⌚", gradient:["#2af598","#009efd"], isNew:false, imageUrl:"https://images.unsplash.com/photo-1546868871-7041f2a55e12?w=400&q=80", description:"AMOLED always-on display, GPS, SpO2, ECG monitor, 14-day battery." },
+  { id:9,  name:"Genuine Leather Tote Bag",      category:"fashion",     price:89.99,  oldPrice:null,   rating:4.6, reviews:203,  stock:18, badge:"New",  emoji:"👜", gradient:["#d4fc79","#96e6a1"], isNew:true,  imageUrl:"https://images.unsplash.com/photo-1548036328-c9fa89d128fa?w=400&q=80", description:"Full-grain leather, fits 15\" laptop. Adjustable strap, 3 internal pockets." },
+  { id:10, name:"Rosehip Facial Oil",            category:"beauty",      price:28.99,  oldPrice:null,   rating:4.7, reviews:389,  stock:60, badge:null,   emoji:"🌹", gradient:["#fccb90","#d57eeb"], isNew:false, imageUrl:"https://images.unsplash.com/photo-1608248543803-ba4f8c70ae0b?w=400&q=80", description:"100% cold-pressed rosehip seed oil. Reduces fine lines overnight." },
+  { id:11, name:"Polarized Sunglasses",          category:"accessories", price:59.99,  oldPrice:79.99,  rating:4.4, reviews:167,  stock:3,  badge:"Sale", emoji:"🕶️",gradient:["#89f7fe","#66a6ff"], isNew:false, imageUrl:"https://images.unsplash.com/photo-1511499767150-a48a237f0083?w=400&q=80", description:"UV400 polarized lenses with TR90 flexible frame. Blocks 99.9% of UV rays." },
+  { id:12, name:"Matcha Latte Starter Kit",      category:"food",        price:24.99,  oldPrice:null,   rating:4.9, reviews:512,  stock:35, badge:"Hot",  emoji:"🍵", gradient:["#84fab0","#8fd3f4"], isNew:false, imageUrl:"https://images.unsplash.com/photo-1536256263959-770b48d82b0a?w=400&q=80", description:"Ceremonial-grade matcha, bamboo whisk, chawan bowl. Makes 30+ cups." },
+  { id:13, name:"Magsafe Wireless Charger",      category:"electronics", price:49.99,  oldPrice:69.99,  rating:4.5, reviews:334,  stock:20, badge:"Sale", emoji:"🔋", gradient:["#a1c4fd","#c2e9fb"], isNew:false, imageUrl:"https://images.unsplash.com/photo-1609091839311-d5365f9ff1c5?w=400&q=80", description:"15W wireless charging for iPhone 12–15. Slim 6mm profile, USB-C included." },
+  { id:14, name:"Premium Cotton Hoodie",         category:"fashion",     price:74.99,  oldPrice:null,   rating:4.6, reviews:291,  stock:45, badge:"New",  emoji:"🧥", gradient:["#e0c3fc","#8ec5fc"], isNew:true,  imageUrl:"https://images.unsplash.com/photo-1556821840-3a63f15732ce?w=400&q=80", description:"400gsm heavyweight French terry cotton. Brushed inner lining, kangaroo pocket." },
+  { id:15, name:"Glossy Lip Set (6 Shades)",     category:"beauty",      price:19.99,  oldPrice:29.99,  rating:4.3, reviews:608,  stock:70, badge:"Sale", emoji:"💄", gradient:["#f77062","#fe5196"], isNew:false, imageUrl:"https://images.unsplash.com/photo-1586495777744-4e6232bf2ebb?w=400&q=80", description:"Long-lasting non-sticky formula with hyaluronic acid. 6 shades included." },
 ];
 
 // ─────────────────────────────────────────────────────────────────
-// CATEGORY DATA
+// CATEGORIES (static — no need for Sheets)
 // ─────────────────────────────────────────────────────────────────
 const CATEGORIES = [
-  { id: "all",         label: "All",         emoji: "🏠" },
-  { id: "phones",      label: "Phones",      emoji: "📱" },
-  { id: "electronics", label: "Electronics", emoji: "💻" },
-  { id: "fashion",     label: "Fashion",     emoji: "👗" },
-  { id: "beauty",      label: "Beauty",      emoji: "✨" },
-  { id: "accessories", label: "Accessories", emoji: "💍" },
-  { id: "food",        label: "Food",        emoji: "🍜" },
+  { id:"all",         label:"All",         emoji:"🏠" },
+  { id:"phones",      label:"Phones",      emoji:"📱" },
+  { id:"electronics", label:"Electronics", emoji:"💻" },
+  { id:"fashion",     label:"Fashion",     emoji:"👗" },
+  { id:"beauty",      label:"Beauty",      emoji:"✨" },
+  { id:"accessories", label:"Accessories", emoji:"💍" },
+  { id:"food",        label:"Food",        emoji:"🍜" },
 ];
 
 // ─────────────────────────────────────────────────────────────────
-// PRODUCT DATA
-// Replace with API call: fetch("/api/products").then(r => r.json())
+// RUNTIME DATA (populated from Sheets or fallback)
 // ─────────────────────────────────────────────────────────────────
-const PRODUCTS = [
-  {
-    id:          1,
-    name:        "iPhone 15 Pro Leather Case",
-    category:    "phones",
-    price:       24.99,
-    oldPrice:    39.99,
-    rating:      4.8,
-    reviews:     312,
-    description: "Premium full-grain leather with MagSafe compatibility. Military-grade drop protection with a slim profile. Available in Midnight and Sand.",
-    stock:       15,
-    badge:       "Sale",
-    emoji:       "📱",
-    gradient:    ["#667eea", "#764ba2"],
-    isNew:       false,
-  },
-  {
-    id:          2,
-    name:        "AirPods Pro 2nd Gen",
-    category:    "electronics",
-    price:       189.99,
-    oldPrice:    249.99,
-    rating:      4.9,
-    reviews:     1204,
-    description: "Active noise cancellation, transparency mode, and spatial audio. 6h listening time; charging case adds 30h total battery life.",
-    stock:       8,
-    badge:       "Hot",
-    emoji:       "🎧",
-    gradient:    ["#f093fb", "#f5576c"],
-    isNew:       false,
-  },
-  {
-    id:          3,
-    name:        "Nike Air Max 2025",
-    category:    "fashion",
-    price:       129.99,
-    oldPrice:    null,
-    rating:      4.7,
-    reviews:     89,
-    description: "Lightweight mesh upper with responsive Air cushioning. Breathable, durable, and engineered for all-day comfort on any surface.",
-    stock:       22,
-    badge:       "New",
-    emoji:       "👟",
-    gradient:    ["#43e97b", "#38f9d7"],
-    isNew:       true,
-  },
-  {
-    id:          4,
-    name:        "Vitamin C Brightening Serum",
-    category:    "beauty",
-    price:       34.99,
-    oldPrice:    49.99,
-    rating:      4.6,
-    reviews:     567,
-    description: "15% stabilized Vitamin C, hyaluronic acid, and niacinamide. Visibly reduces dark spots and boosts radiance in 4 weeks.",
-    stock:       40,
-    badge:       "Sale",
-    emoji:       "🌟",
-    gradient:    ["#fa709a", "#fee140"],
-    isNew:       false,
-  },
-  {
-    id:          5,
-    name:        "Gold Link Chain Necklace",
-    category:    "accessories",
-    price:       45.99,
-    oldPrice:    null,
-    rating:      4.5,
-    reviews:     143,
-    description: "18k gold-plated stainless steel link chain. Tarnish-resistant and waterproof. Length 45 cm with a 5 cm extender.",
-    stock:       30,
-    badge:       "New",
-    emoji:       "📿",
-    gradient:    ["#f6d365", "#fda085"],
-    isNew:       true,
-  },
-  {
-    id:          6,
-    name:        "Sushi Premium Bento Box",
-    category:    "food",
-    price:       18.99,
-    oldPrice:    null,
-    rating:      4.8,
-    reviews:     421,
-    description: "12-piece premium sushi selection: salmon, tuna, prawn, and vegetable rolls. Freshly prepared and delivered same day.",
-    stock:       50,
-    badge:       "Hot",
-    emoji:       "🍱",
-    gradient:    ["#a18cd1", "#fbc2eb"],
-    isNew:       false,
-  },
-  {
-    id:          7,
-    name:        "Samsung Galaxy S24 Ultra",
-    category:    "phones",
-    price:       899.99,
-    oldPrice:    1099.99,
-    rating:      4.8,
-    reviews:     2341,
-    description: "6.8\" QHD+ Dynamic AMOLED, 200MP camera system, built-in S Pen, and 5000mAh battery with 45W fast charging.",
-    stock:       5,
-    badge:       "Hot",
-    emoji:       "🤳",
-    gradient:    ["#0f0c29", "#302b63"],
-    isNew:       false,
-  },
-  {
-    id:          8,
-    name:        "Smart Watch Pro 9",
-    category:    "electronics",
-    price:       299.99,
-    oldPrice:    399.99,
-    rating:      4.7,
-    reviews:     876,
-    description: "AMOLED always-on display, GPS, SpO2, ECG monitor, 14-day battery life. 5ATM water resistance.",
-    stock:       12,
-    badge:       "Sale",
-    emoji:       "⌚",
-    gradient:    ["#2af598", "#009efd"],
-    isNew:       false,
-  },
-  {
-    id:          9,
-    name:        "Genuine Leather Tote Bag",
-    category:    "fashion",
-    price:       89.99,
-    oldPrice:    null,
-    rating:      4.6,
-    reviews:     203,
-    description: "Full-grain leather with canvas lining. Fits a 15\" laptop. Adjustable shoulder strap, magnetic closure, 3 internal pockets.",
-    stock:       18,
-    badge:       "New",
-    emoji:       "👜",
-    gradient:    ["#d4fc79", "#96e6a1"],
-    isNew:       true,
-  },
-  {
-    id:          10,
-    name:        "Rosehip Facial Oil",
-    category:    "beauty",
-    price:       28.99,
-    oldPrice:    null,
-    rating:      4.7,
-    reviews:     389,
-    description: "100% cold-pressed rosehip seed oil. Rich in omega fatty acids and vitamin A. Reduces fine lines and improves skin texture overnight.",
-    stock:       60,
-    badge:       null,
-    emoji:       "🌹",
-    gradient:    ["#fccb90", "#d57eeb"],
-    isNew:       false,
-  },
-  {
-    id:          11,
-    name:        "Polarized Sunglasses",
-    category:    "accessories",
-    price:       59.99,
-    oldPrice:    79.99,
-    rating:      4.4,
-    reviews:     167,
-    description: "UV400 polarized lenses with TR90 flexible frame. Blocks 99.9% of UVA/UVB rays. Includes protective case and microfiber cloth.",
-    stock:       25,
-    badge:       "Sale",
-    emoji:       "🕶️",
-    gradient:    ["#89f7fe", "#66a6ff"],
-    isNew:       false,
-  },
-  {
-    id:          12,
-    name:        "Matcha Latte Starter Kit",
-    category:    "food",
-    price:       24.99,
-    oldPrice:    null,
-    rating:      4.9,
-    reviews:     512,
-    description: "Ceremonial-grade Japanese matcha, bamboo whisk, and chawan bowl. Makes 30+ cups. Perfect gift for matcha lovers.",
-    stock:       35,
-    badge:       "Hot",
-    emoji:       "🍵",
-    gradient:    ["#84fab0", "#8fd3f4"],
-    isNew:       false,
-  },
-  {
-    id:          13,
-    name:        "Magsafe Wireless Charger",
-    category:    "electronics",
-    price:       49.99,
-    oldPrice:    69.99,
-    rating:      4.5,
-    reviews:     334,
-    description: "15W wireless charging for iPhone 12–15 series. Slim 6mm profile, LED indicator, USB-C cable included. Works with any Qi device at 7.5W.",
-    stock:       20,
-    badge:       "Sale",
-    emoji:       "🔋",
-    gradient:    ["#a1c4fd", "#c2e9fb"],
-    isNew:       false,
-  },
-  {
-    id:          14,
-    name:        "Premium Cotton Hoodie",
-    category:    "fashion",
-    price:       74.99,
-    oldPrice:    null,
-    rating:      4.6,
-    reviews:     291,
-    description: "400gsm heavyweight French terry cotton. Brushed inner lining, reinforced ribbing, and a spacious kangaroo pocket. Unisex sizing.",
-    stock:       45,
-    badge:       "New",
-    emoji:       "🧥",
-    gradient:    ["#e0c3fc", "#8ec5fc"],
-    isNew:       true,
-  },
-  {
-    id:          15,
-    name:        "Glossy Lip Set (6 Shades)",
-    category:    "beauty",
-    price:       19.99,
-    oldPrice:    29.99,
-    rating:      4.3,
-    reviews:     608,
-    description: "Long-lasting non-sticky formula with hyaluronic acid for plumping. Shades: Nude Glam, Berry Pop, Coral Sun, Rose Baby, Red Hot, Peach Kiss.",
-    stock:       70,
-    badge:       "Sale",
-    emoji:       "💄",
-    gradient:    ["#f77062", "#fe5196"],
-    isNew:       false,
-  },
-];
+let PRODUCTS = [];
+let BANNERS  = [];
 
 // ─────────────────────────────────────────────────────────────────
-// TELEGRAM WEBAP INIT
+// TELEGRAM
 // ─────────────────────────────────────────────────────────────────
 const tg = window.Telegram?.WebApp ?? null;
-
-// True only when launched inside an actual Telegram client
 const isInTelegram = !!(tg && tg.initData && tg.initData.length > 0);
 
 if (tg) {
@@ -330,26 +101,122 @@ const state = {
   modalQty:        1,
   carouselIndex:   0,
   carouselTimer:   null,
+  cartStep:        "cart",   // "cart" | "address"
 };
 
 // ─────────────────────────────────────────────────────────────────
-// LOCALSTORAGE HELPERS
+// LOCALSTORAGE
 // ─────────────────────────────────────────────────────────────────
 function loadFromStorage(key, fallback) {
+  try { const r = localStorage.getItem(key); return r ? JSON.parse(r) : fallback; }
+  catch { return fallback; }
+}
+function saveToStorage(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+}
+function persistCart()     { saveToStorage(CONFIG.localStorageCartKey, state.cart); }
+function persistWishlist() { saveToStorage(CONFIG.localStorageWishKey, state.wishlist); }
+
+// ─────────────────────────────────────────────────────────────────
+// CSV PARSER (handles quoted commas and newlines)
+// ─────────────────────────────────────────────────────────────────
+function parseCSV(text) {
+  const rows   = [];
+  const lines  = text.trim().split("\n");
+  if (!lines.length) return rows;
+  const headers = splitCSVLine(lines[0]);
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    const vals = splitCSVLine(line);
+    const row  = {};
+    headers.forEach((h, idx) => { row[h.trim()] = (vals[idx] ?? "").trim(); });
+    rows.push(row);
+  }
+  return rows;
+}
+
+function splitCSVLine(line) {
+  const result = [];
+  let cur = "", inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"')         { inQ = !inQ; }
+    else if (c === "," && !inQ) { result.push(cur); cur = ""; }
+    else                        { cur += c; }
+  }
+  result.push(cur);
+  return result;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// GOOGLE SHEETS FETCH
+// ─────────────────────────────────────────────────────────────────
+async function fetchSheetCSV(url) {
+  const res  = await fetch(url, { cache: "no-cache" });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return parseCSV(await res.text());
+}
+
+function csvToProduct(row) {
+  return {
+    id:          parseInt(row.id)         || 0,
+    name:        row.name                 || "",
+    category:    row.category             || "all",
+    price:       parseFloat(row.price)    || 0,
+    oldPrice:    row.oldPrice             ? parseFloat(row.oldPrice) : null,
+    rating:      parseFloat(row.rating)   || 0,
+    reviews:     parseInt(row.reviews)    || 0,
+    description: row.description          || "",
+    stock:       parseInt(row.stock)      || 0,
+    badge:       row.badge                || null,
+    emoji:       row.emoji                || "📦",
+    gradient:    [row.color1 || "#667eea", row.color2 || "#764ba2"],
+    isNew:       row.isNew === "TRUE"     || row.isNew === "true",
+    imageUrl:    row.imageUrl             || null,
+  };
+}
+
+function csvToBanner(row) {
+  return {
+    id:       row.id       || "",
+    label:    row.label    || "",
+    title:    row.title    || "",
+    subtitle: row.subtitle || "",
+    cta:      row.cta      || "Shop Now",
+    emoji:    row.emoji    || "🛍️",
+    gradient: [row.color1  || "#667eea", row.color2 || "#764ba2"],
+    category: row.category || "all",
+  };
+}
+
+async function loadData() {
   try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : fallback;
-  } catch {
-    return fallback;
+    const [pRows, bRows] = await Promise.all([
+      fetchSheetCSV(CONFIG.sheetsProducts),
+      fetchSheetCSV(CONFIG.sheetsCarousel),
+    ]);
+    PRODUCTS = pRows.map(csvToProduct).filter(p => p.id && p.name);
+    BANNERS  = bRows.map(csvToBanner).filter(b => b.title);
+    console.log(`✅ Loaded ${PRODUCTS.length} products and ${BANNERS.length} banners from Sheets`);
+  } catch (err) {
+    console.warn("⚠️ Could not load from Google Sheets — using fallback data.", err.message);
+    PRODUCTS = [...FALLBACK_PRODUCTS];
+    BANNERS  = [...FALLBACK_BANNERS];
   }
 }
 
-function saveToStorage(key, value) {
-  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* quota exceeded */ }
+// ─────────────────────────────────────────────────────────────────
+// SKELETON LOADING
+// ─────────────────────────────────────────────────────────────────
+function showSkeleton() {
+  document.getElementById("skeletonGrid").classList.remove("hidden");
+  document.getElementById("productGrid").classList.add("hidden");
 }
-
-function persistCart()     { saveToStorage(CONFIG.localStorageCartKey, state.cart); }
-function persistWishlist() { saveToStorage(CONFIG.localStorageWishKey, state.wishlist); }
+function hideSkeleton() {
+  document.getElementById("skeletonGrid").classList.add("hidden");
+  document.getElementById("productGrid").classList.remove("hidden");
+}
 
 // ─────────────────────────────────────────────────────────────────
 // THEME
@@ -357,20 +224,16 @@ function persistWishlist() { saveToStorage(CONFIG.localStorageWishKey, state.wis
 function applyTheme() {
   const scheme = tg?.colorScheme ?? "light";
   document.documentElement.setAttribute("data-theme", scheme);
-
   if (tg?.themeParams) {
-    const p = tg.themeParams;
-    const root = document.documentElement;
-    if (p.bg_color)             root.style.setProperty("--bg",       p.bg_color);
-    if (p.secondary_bg_color)   root.style.setProperty("--bg-card",  p.secondary_bg_color);
-    if (p.text_color)           root.style.setProperty("--text",     p.text_color);
-    if (p.hint_color)           root.style.setProperty("--text-sub", p.hint_color);
-    if (p.button_color)         root.style.setProperty("--accent",   p.button_color);
-    if (p.button_text_color)    root.style.setProperty("--accent-text", p.button_text_color);
+    const p = tg.themeParams, r = document.documentElement;
+    if (p.bg_color)           r.style.setProperty("--bg",          p.bg_color);
+    if (p.secondary_bg_color) r.style.setProperty("--bg-card",     p.secondary_bg_color);
+    if (p.text_color)         r.style.setProperty("--text",        p.text_color);
+    if (p.hint_color)         r.style.setProperty("--text-sub",    p.hint_color);
+    if (p.button_color)       r.style.setProperty("--accent",      p.button_color);
+    if (p.button_text_color)  r.style.setProperty("--accent-text", p.button_text_color);
   }
 }
-
-// Re-apply whenever the user switches Telegram's theme
 if (tg) tg.onEvent("themeChanged", applyTheme);
 
 // ─────────────────────────────────────────────────────────────────
@@ -380,7 +243,6 @@ const haptic = {
   light()     { tg?.HapticFeedback?.impactOccurred("light"); },
   medium()    { tg?.HapticFeedback?.impactOccurred("medium"); },
   success()   { tg?.HapticFeedback?.notificationOccurred("success"); },
-  warning()   { tg?.HapticFeedback?.notificationOccurred("warning"); },
   error()     { tg?.HapticFeedback?.notificationOccurred("error"); },
   selection() { tg?.HapticFeedback?.selectionChanged(); },
 };
@@ -389,9 +251,9 @@ const haptic = {
 // TOAST
 // ─────────────────────────────────────────────────────────────────
 let _toastTimer = null;
-function showToast(message, duration = 2200) {
+function showToast(msg, duration = 2400) {
   const el = document.getElementById("toast");
-  el.textContent = message;
+  el.textContent = msg;
   el.classList.add("show");
   clearTimeout(_toastTimer);
   _toastTimer = setTimeout(() => el.classList.remove("show"), duration);
@@ -403,110 +265,69 @@ function showToast(message, duration = 2200) {
 function renderCarousel() {
   const track = document.getElementById("carouselTrack");
   const dots  = document.getElementById("carouselDots");
+  if (!BANNERS.length) return;
 
   track.innerHTML = BANNERS.map((b, i) => `
-    <div
-      class="carousel-slide"
-      data-index="${i}"
-      data-category="${b.category}"
-      role="tab"
-      aria-label="${b.title.replace("\n", " ")}"
-      tabindex="0"
-    >
-      <div class="slide-bg" style="background: linear-gradient(135deg, ${b.gradient[0]}, ${b.gradient[1]});"></div>
+    <div class="carousel-slide" data-index="${i}" data-category="${b.category}" tabindex="0">
+      <div class="slide-bg" style="background:linear-gradient(135deg,${b.gradient[0]},${b.gradient[1]});"></div>
       <span class="slide-emoji" aria-hidden="true">${b.emoji}</span>
       <div class="slide-content">
         <div class="slide-label">${b.label}</div>
-        <div class="slide-title">${b.title.replace("\n", "<br>")}</div>
+        <div class="slide-title">${b.title.replace(/\\n/g,"<br>")}</div>
         <div class="slide-subtitle">${b.subtitle}</div>
         <span class="slide-btn">${b.cta} →</span>
       </div>
-    </div>
-  `).join("");
+    </div>`).join("");
 
-  dots.innerHTML = BANNERS.map((_, i) => `
-    <button class="dot ${i === 0 ? "active" : ""}" data-index="${i}" role="tab" aria-label="Banner ${i + 1}"></button>
-  `).join("");
+  dots.innerHTML = BANNERS.map((_,i) => `
+    <button class="dot ${i===0?"active":""}" data-index="${i}"></button>`).join("");
 
-  // Slide click → filter by category
-  track.querySelectorAll(".carousel-slide").forEach(slide => {
-    slide.addEventListener("click", () => {
+  track.querySelectorAll(".carousel-slide").forEach(s => {
+    s.addEventListener("click", () => {
       haptic.selection();
-      const cat = slide.dataset.category;
-      if (cat && cat !== state.activeCategory) {
-        setCategory(cat);
-        document.getElementById("mainContent")
-          .querySelector(".products-section")
-          .scrollIntoView({ behavior: "smooth", block: "start" });
-      }
+      setCategory(s.dataset.category || "all");
     });
   });
-
-  dots.querySelectorAll(".dot").forEach(dot => {
-    dot.addEventListener("click", () => {
-      haptic.light();
-      goToSlide(Number(dot.dataset.index));
-    });
+  dots.querySelectorAll(".dot").forEach(d => {
+    d.addEventListener("click", () => { haptic.light(); goToSlide(Number(d.dataset.index)); });
   });
-
   startCarousel();
 }
 
-function goToSlide(index) {
-  const track   = document.getElementById("carouselTrack");
-  const slides  = track.querySelectorAll(".carousel-slide");
-  const dots    = document.getElementById("carouselDots").querySelectorAll(".dot");
-
+function goToSlide(idx) {
+  const slides = document.querySelectorAll(".carousel-slide");
+  const dots   = document.querySelectorAll(".dot");
   if (!slides.length) return;
-  state.carouselIndex = (index + slides.length) % slides.length;
-
-  // Calculate offset: each slide is 100% - 40px padding + 12px gap
-  // We use CSS-level scroll instead for reliability
-  const viewport = track.parentElement;
-  const slideW   = slides[0].getBoundingClientRect().width + 12; // gap
-  track.style.transform = `translateX(calc(-${state.carouselIndex} * (${slideW}px)))`;
-
-  dots.forEach((d, i) => d.classList.toggle("active", i === state.carouselIndex));
+  state.carouselIndex = (idx + slides.length) % slides.length;
+  const w = slides[0].getBoundingClientRect().width + 12;
+  document.getElementById("carouselTrack").style.transform = `translateX(calc(-${state.carouselIndex} * ${w}px))`;
+  dots.forEach((d,i) => d.classList.toggle("active", i === state.carouselIndex));
 }
 
 function startCarousel() {
   clearInterval(state.carouselTimer);
-  state.carouselTimer = setInterval(() => {
-    goToSlide(state.carouselIndex + 1);
-  }, CONFIG.carouselInterval);
+  state.carouselTimer = setInterval(() => goToSlide(state.carouselIndex + 1), CONFIG.carouselInterval);
 }
 
-// Recalculate slide width on resize
-window.addEventListener("resize", () => goToSlide(state.carouselIndex), { passive: true });
+window.addEventListener("resize", () => goToSlide(state.carouselIndex), { passive:true });
 
 // ─────────────────────────────────────────────────────────────────
 // CATEGORIES
 // ─────────────────────────────────────────────────────────────────
 function renderCategories() {
   const list = document.getElementById("categoryList");
-  list.innerHTML = CATEGORIES.map(cat => `
-    <button
-      class="cat-chip ${cat.id === state.activeCategory ? "active" : ""}"
-      data-cat="${cat.id}"
-      role="listitem"
-    >
-      <span aria-hidden="true">${cat.emoji}</span> ${cat.label}
-    </button>
-  `).join("");
-
+  list.innerHTML = CATEGORIES.map(c => `
+    <button class="cat-chip ${c.id===state.activeCategory?"active":""}" data-cat="${c.id}">
+      <span aria-hidden="true">${c.emoji}</span> ${c.label}
+    </button>`).join("");
   list.querySelectorAll(".cat-chip").forEach(btn => {
-    btn.addEventListener("click", () => {
-      haptic.selection();
-      setCategory(btn.dataset.cat);
-    });
+    btn.addEventListener("click", () => { haptic.selection(); setCategory(btn.dataset.cat); });
   });
 }
 
 function setCategory(catId) {
   state.activeCategory = catId;
-  document.querySelectorAll(".cat-chip").forEach(b => {
-    b.classList.toggle("active", b.dataset.cat === catId);
-  });
+  document.querySelectorAll(".cat-chip").forEach(b => b.classList.toggle("active", b.dataset.cat === catId));
   renderProducts();
 }
 
@@ -515,43 +336,78 @@ function setCategory(catId) {
 // ─────────────────────────────────────────────────────────────────
 function getFilteredProducts() {
   let list = [...PRODUCTS];
-
-  // Category
-  if (state.activeCategory !== "all") {
-    list = list.filter(p => p.category === state.activeCategory);
-  }
-
-  // Search
+  if (state.activeCategory !== "all") list = list.filter(p => p.category === state.activeCategory);
   if (state.searchQuery) {
     const q = state.searchQuery.toLowerCase();
     list = list.filter(p =>
-      p.name.toLowerCase().includes(q)        ||
-      p.category.toLowerCase().includes(q)    ||
+      p.name.toLowerCase().includes(q) ||
+      p.category.toLowerCase().includes(q) ||
       p.description.toLowerCase().includes(q) ||
       (p.badge && p.badge.toLowerCase().includes(q))
     );
   }
-
-  // Sort
   switch (state.sortBy) {
-    case "price-low":
-      list.sort((a, b) => a.price - b.price);
-      break;
-    case "price-high":
-      list.sort((a, b) => b.price - a.price);
-      break;
-    case "newest":
-      list.sort((a, b) => (b.isNew ? 1 : 0) - (a.isNew ? 1 : 0));
-      break;
-    default: // popular — sort by reviews descending
-      list.sort((a, b) => b.reviews - a.reviews);
+    case "price-low":  list.sort((a,b) => a.price - b.price); break;
+    case "price-high": list.sort((a,b) => b.price - a.price); break;
+    case "newest":     list.sort((a,b) => (b.isNew?1:0) - (a.isNew?1:0)); break;
+    default:           list.sort((a,b) => b.reviews - a.reviews);
   }
-
   return list;
 }
 
 // ─────────────────────────────────────────────────────────────────
-// PRODUCTS RENDER
+// PRODUCT CARD HTML
+// ─────────────────────────────────────────────────────────────────
+function productCardHTML(p) {
+  const inCart    = state.cart.some(c => c.id === p.id);
+  const inWish    = state.wishlist.includes(p.id);
+  const oos       = p.stock === 0;
+  const lowStock  = p.stock > 0 && p.stock <= 5;
+  const discount  = p.oldPrice ? Math.round((1 - p.price / p.oldPrice) * 100) : 0;
+  const badgeCls  = p.badge ? `badge-${p.badge.toLowerCase()}` : "";
+
+  const imageHTML = p.imageUrl
+    ? `<img class="product-img" src="${p.imageUrl}" alt="${p.name}" loading="lazy"
+         onerror="this.closest('.product-image').classList.add('img-error')" />
+       <span class="product-emoji" aria-hidden="true">${p.emoji}</span>`
+    : `<span class="product-emoji" aria-hidden="true">${p.emoji}</span>`;
+
+  return `
+  <div class="product-card ${oos ? "oos" : ""} ${p.imageUrl ? "has-image" : ""}"
+       data-id="${p.id}" tabindex="0" role="button" aria-label="View ${p.name}">
+    <div class="product-image" style="background:linear-gradient(135deg,${p.gradient[0]}22,${p.gradient[1]}33);">
+      ${imageHTML}
+      ${oos ? `<div class="oos-overlay"><span class="oos-label">Out of Stock</span></div>` : ""}
+      ${p.badge && !oos ? `<span class="product-badge ${badgeCls}">${p.badge}</span>` : ""}
+      <button class="wishlist-toggle ${inWish ? "active" : ""}" aria-label="${inWish ? "Remove from wishlist" : "Add to wishlist"}">
+        ${inWish ? "♥" : "♡"}
+      </button>
+    </div>
+    <div class="product-info">
+      <div class="product-category">${p.category}</div>
+      <div class="product-name">${p.name}</div>
+      <div class="product-rating">
+        <span class="star" aria-hidden="true">★</span>
+        <span>${p.rating}</span>
+        <span>(${formatNumber(p.reviews)})</span>
+      </div>
+      ${lowStock ? `<div class="low-stock-warn">⚡ Only ${p.stock} left!</div>` : ""}
+      <div class="product-pricing">
+        <span class="product-price">${formatPrice(p.price)}</span>
+        ${p.oldPrice ? `<span class="product-old-price">${formatPrice(p.oldPrice)}</span>` : ""}
+        ${discount   ? `<span class="discount-label">-${discount}%</span>` : ""}
+      </div>
+    </div>
+    <div class="product-card-footer">
+      <button class="btn-add-cart ${inCart ? "in-cart" : ""} ${oos ? "oos-btn" : ""}" ${oos ? "disabled" : ""}>
+        ${oos ? "Out of Stock" : inCart ? "✓ In Cart" : "+ Add to Cart"}
+      </button>
+    </div>
+  </div>`;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// RENDER PRODUCTS
 // ─────────────────────────────────────────────────────────────────
 function renderProducts() {
   const grid    = document.getElementById("productGrid");
@@ -567,174 +423,105 @@ function renderProducts() {
     empty.classList.remove("hidden");
     return;
   }
-
   grid.classList.remove("hidden");
   empty.classList.add("hidden");
-
   grid.innerHTML = list.map(p => productCardHTML(p)).join("");
 
-  // Bind card events
   grid.querySelectorAll(".product-card").forEach(card => {
     const id = Number(card.dataset.id);
-
     card.querySelector(".btn-add-cart").addEventListener("click", e => {
       e.stopPropagation();
+      const p = PRODUCTS.find(x => x.id === id);
+      if (p && p.stock === 0) return;
       haptic.medium();
       addToCart(id, 1);
     });
-
     card.querySelector(".wishlist-toggle").addEventListener("click", e => {
       e.stopPropagation();
       haptic.light();
       toggleWishlist(id);
     });
-
     card.addEventListener("click", () => openProductModal(id));
   });
 }
 
-function productCardHTML(p) {
-  const inCart     = state.cart.some(c => c.id === p.id);
-  const inWish     = state.wishlist.includes(p.id);
-  const discount   = p.oldPrice ? Math.round((1 - p.price / p.oldPrice) * 100) : 0;
-  const badgeClass = p.badge ? `badge-${p.badge.toLowerCase()}` : "";
-
-  return `
-  <div class="product-card" data-id="${p.id}" tabindex="0" role="button" aria-label="View ${p.name}">
-    <div class="product-image" style="background: linear-gradient(135deg, ${p.gradient[0]}33, ${p.gradient[1]}55);">
-      <span style="font-size:52px" aria-hidden="true">${p.emoji}</span>
-      ${p.badge ? `<span class="product-badge ${badgeClass}">${p.badge}</span>` : ""}
-      <button class="wishlist-toggle ${inWish ? "active" : ""}" aria-label="${inWish ? "Remove from wishlist" : "Add to wishlist"}">
-        ${inWish ? "♥" : "♡"}
-      </button>
-    </div>
-    <div class="product-info">
-      <div class="product-category">${p.category}</div>
-      <div class="product-name">${p.name}</div>
-      <div class="product-rating">
-        <span class="star" aria-hidden="true">★</span>
-        <span>${p.rating}</span>
-        <span>(${formatNumber(p.reviews)})</span>
-      </div>
-      <div class="product-pricing">
-        <span class="product-price">${formatPrice(p.price)}</span>
-        ${p.oldPrice ? `<span class="product-old-price">${formatPrice(p.oldPrice)}</span>` : ""}
-        ${discount ? `<span class="discount-label">-${discount}%</span>` : ""}
-      </div>
-    </div>
-    <div class="product-card-footer">
-      <button class="btn-add-cart ${inCart ? "in-cart" : ""}">
-        ${inCart
-          ? `<span>✓ In Cart</span>`
-          : `<span>+ Add to Cart</span>`
-        }
-      </button>
-    </div>
-  </div>`;
-}
-
 // ─────────────────────────────────────────────────────────────────
-// PRODUCT DETAIL MODAL
+// PRODUCT MODAL
 // ─────────────────────────────────────────────────────────────────
 function openProductModal(id) {
   const p = PRODUCTS.find(x => x.id === id);
   if (!p) return;
-
   haptic.light();
   state.currentProduct = p;
-  state.modalQty       = 1;
+  state.modalQty = 1;
 
-  const hero  = document.getElementById("modalHero");
-  const body  = document.getElementById("modalBody");
-  const inCart = state.cart.some(c => c.id === p.id);
-  const inWish = state.wishlist.includes(p.id);
+  const inCart   = state.cart.some(c => c.id === p.id);
+  const oos      = p.stock === 0;
+  const lowStock = p.stock > 0 && p.stock <= 5;
   const discount = p.oldPrice ? Math.round((1 - p.price / p.oldPrice) * 100) : 0;
+  const maxQty   = p.stock > 0 ? p.stock : 1;
 
   let stockClass, stockLabel;
-  if (p.stock === 0)      { stockClass = "out-stock";  stockLabel = "Out of Stock"; }
-  else if (p.stock <= 5)  { stockClass = "low-stock";  stockLabel = `Only ${p.stock} left!`; }
-  else                    { stockClass = "in-stock";   stockLabel = "In Stock"; }
+  if (oos)           { stockClass = "out-stock";  stockLabel = "Out of Stock"; }
+  else if (lowStock) { stockClass = "low-stock";  stockLabel = `Only ${p.stock} left!`; }
+  else               { stockClass = "in-stock";   stockLabel = "In Stock"; }
 
-  hero.style.cssText = `background: linear-gradient(135deg, ${p.gradient[0]}, ${p.gradient[1]});`;
-  hero.innerHTML = `<span style="font-size:90px" aria-hidden="true">${p.emoji}</span>`;
+  const hero = document.getElementById("modalHero");
+  if (p.imageUrl) {
+    hero.innerHTML = `<img class="modal-hero-img" src="${p.imageUrl}" alt="${p.name}"
+      onerror="this.parentElement.innerHTML='<span style=font-size:90px>${p.emoji}</span>';this.parentElement.style.display='flex';this.parentElement.style.alignItems='center';this.parentElement.style.justifyContent='center';" />`;
+    hero.style.cssText = "";
+  } else {
+    hero.innerHTML = `<span style="font-size:90px">${p.emoji}</span>`;
+    hero.style.cssText = `background:linear-gradient(135deg,${p.gradient[0]},${p.gradient[1]});`;
+  }
 
-  body.innerHTML = `
+  document.getElementById("modalBody").innerHTML = `
     <div class="modal-cat-badge">${p.category}</div>
     <h2 class="modal-title">${p.name}</h2>
     <div class="modal-meta-row">
-      <div class="modal-rating">
-        <span class="star" aria-hidden="true">★</span>
-        <strong>${p.rating}</strong>
-        <span style="color:var(--text-sub)">${formatNumber(p.reviews)} reviews</span>
-      </div>
+      <div class="modal-rating"><span class="star">★</span> <strong>${p.rating}</strong> <span style="color:var(--text-sub)">${formatNumber(p.reviews)} reviews</span></div>
       <span class="modal-stock ${stockClass}">${stockLabel}</span>
     </div>
     <p class="modal-desc">${p.description}</p>
     <div class="modal-pricing">
       <span class="modal-price">${formatPrice(p.price)}</span>
       ${p.oldPrice ? `<span class="modal-old-price">${formatPrice(p.oldPrice)}</span>` : ""}
-      ${discount ? `<span class="modal-discount">Save ${discount}%</span>` : ""}
+      ${discount   ? `<span class="modal-discount">Save ${discount}%</span>` : ""}
     </div>
+    ${!oos ? `
     <div class="qty-row">
       <span class="qty-label">Quantity</span>
       <div class="qty-controls">
-        <button class="qty-btn" id="qtyDec" aria-label="Decrease quantity" ${state.modalQty <= 1 ? "disabled" : ""}>−</button>
-        <span class="qty-value" id="qtyVal">${state.modalQty}</span>
-        <button class="qty-btn" id="qtyInc" aria-label="Increase quantity">+</button>
+        <button class="qty-btn" id="qtyDec" ${state.modalQty <= 1 ? "disabled" : ""}>−</button>
+        <span class="qty-value" id="qtyVal">1</span>
+        <button class="qty-btn" id="qtyInc" ${state.modalQty >= maxQty ? "disabled" : ""}>+</button>
       </div>
-    </div>
-    <button class="btn-add-to-cart ${inCart ? "in-cart" : ""}" id="modalAddBtn" ${p.stock === 0 ? "disabled" : ""}>
-      ${p.stock === 0
-        ? "Out of Stock"
-        : inCart
-          ? `✓ Added to Cart · ${formatPrice(p.price * state.modalQty)}`
-          : `Add to Cart · ${formatPrice(p.price * state.modalQty)}`
-      }
-    </button>
-  `;
+    </div>` : ""}
+    <button class="btn-add-to-cart ${inCart ? "in-cart" : ""}" id="modalAddBtn" ${oos ? "disabled" : ""}>
+      ${oos ? "Out of Stock" : inCart ? `✓ Added to Cart · ${formatPrice(p.price)}` : `Add to Cart · ${formatPrice(p.price)}`}
+    </button>`;
 
-  // Quantity controls
-  const qtyDec = body.querySelector("#qtyDec");
-  const qtyInc = body.querySelector("#qtyInc");
-  const qtyVal = body.querySelector("#qtyVal");
-  const addBtn = body.querySelector("#modalAddBtn");
+  if (!oos) {
+    const dec = document.getElementById("qtyDec");
+    const inc = document.getElementById("qtyInc");
+    const val = document.getElementById("qtyVal");
+    const btn = document.getElementById("modalAddBtn");
 
-  qtyDec.addEventListener("click", () => {
-    if (state.modalQty > 1) {
-      haptic.light();
-      state.modalQty--;
-      qtyVal.textContent = state.modalQty;
-      qtyDec.disabled = state.modalQty <= 1;
-      updateModalAddBtn(addBtn, p);
-    }
-  });
-
-  qtyInc.addEventListener("click", () => {
-    haptic.light();
-    state.modalQty++;
-    qtyVal.textContent = state.modalQty;
-    qtyDec.disabled = false;
-    updateModalAddBtn(addBtn, p);
-  });
-
-  addBtn.addEventListener("click", () => {
-    if (p.stock === 0) return;
-    haptic.medium();
-    addToCart(p.id, state.modalQty);
-    updateModalAddBtn(addBtn, p);
-    // Use Telegram MainButton if inside Telegram
-    syncTelegramMainButton();
-  });
+    dec.addEventListener("click", () => {
+      if (state.modalQty > 1) { haptic.light(); state.modalQty--; val.textContent = state.modalQty; dec.disabled = state.modalQty <= 1; inc.disabled = false; updateModalBtn(btn, p); }
+    });
+    inc.addEventListener("click", () => {
+      if (state.modalQty < maxQty) { haptic.light(); state.modalQty++; val.textContent = state.modalQty; dec.disabled = false; inc.disabled = state.modalQty >= maxQty; updateModalBtn(btn, p); }
+    });
+    btn.addEventListener("click", () => { haptic.medium(); addToCart(p.id, state.modalQty); updateModalBtn(btn, p); syncTelegramMainButton(); });
+  }
 
   openOverlay("productModal");
-
-  if (tg) {
-    tg.BackButton.show();
-    tg.BackButton.onClick(closeAllOverlays);
-  }
+  if (tg) { tg.BackButton.show(); tg.BackButton.onClick(closeAllOverlays); }
 }
 
-function updateModalAddBtn(btn, p) {
+function updateModalBtn(btn, p) {
   const inCart = state.cart.some(c => c.id === p.id);
   btn.className = `btn-add-to-cart ${inCart ? "in-cart" : ""}`;
   btn.textContent = inCart
@@ -746,21 +533,19 @@ function updateModalAddBtn(btn, p) {
 // CART
 // ─────────────────────────────────────────────────────────────────
 function addToCart(id, qty = 1) {
-  const product  = PRODUCTS.find(p => p.id === id);
-  if (!product) return;
-
+  const p = PRODUCTS.find(x => x.id === id);
+  if (!p || p.stock === 0) return;
   const existing = state.cart.find(c => c.id === id);
   if (existing) {
-    existing.qty += qty;
+    existing.qty = Math.min(existing.qty + qty, p.stock);
   } else {
-    state.cart.push({ id, qty });
-    showToast(`🛒 "${product.name}" added to cart`);
+    state.cart.push({ id, qty: Math.min(qty, p.stock) });
+    showToast(`🛒 "${p.name}" added to cart`);
     haptic.success();
   }
-
   persistCart();
   updateCartCount();
-  renderProducts(); // refresh card states
+  renderProducts();
   syncTelegramMainButton();
 }
 
@@ -776,9 +561,10 @@ function removeFromCart(id) {
 
 function updateCartQty(id, delta) {
   const item = state.cart.find(c => c.id === id);
-  if (!item) return;
-  item.qty = Math.max(1, item.qty + delta);
+  const p    = PRODUCTS.find(x => x.id === id);
+  if (!item || !p) return;
   haptic.light();
+  item.qty = Math.max(1, Math.min(item.qty + delta, p.stock));
   persistCart();
   renderCartItems();
   syncTelegramMainButton();
@@ -796,7 +582,7 @@ function getDeliveryFee(subtotal) {
 }
 
 function updateCartCount() {
-  const total = state.cart.reduce((s, c) => s + c.qty, 0);
+  const total = state.cart.reduce((s,c) => s + c.qty, 0);
   const badge = document.getElementById("cartCount");
   badge.textContent = total;
   badge.classList.toggle("hidden", total === 0);
@@ -826,33 +612,93 @@ function renderCartItems() {
     if (!p) return "";
     return `
       <div class="cart-item" data-id="${p.id}">
-        <div class="cart-item-img" style="background: linear-gradient(135deg, ${p.gradient[0]}33, ${p.gradient[1]}44);">
-          <span aria-hidden="true">${p.emoji}</span>
+        <div class="cart-item-img" style="background:linear-gradient(135deg,${p.gradient[0]}33,${p.gradient[1]}44);">
+          ${p.imageUrl
+            ? `<img src="${p.imageUrl}" alt="${p.name}" style="width:100%;height:100%;object-fit:cover;border-radius:var(--radius-sm)" onerror="this.style.display='none'">`
+            : `<span>${p.emoji}</span>`}
         </div>
         <div class="cart-item-info">
           <div class="cart-item-name">${p.name}</div>
           <div class="cart-item-price">${formatPrice(p.price * item.qty)}</div>
         </div>
         <div class="cart-item-controls">
-          <button class="cart-qty-btn" data-action="dec" aria-label="Decrease">−</button>
+          <button class="cart-qty-btn" data-action="dec">−</button>
           <span class="cart-qty-num">${item.qty}</span>
-          <button class="cart-qty-btn" data-action="inc" aria-label="Increase">+</button>
+          <button class="cart-qty-btn" data-action="inc" ${item.qty >= p.stock ? "disabled" : ""}>+</button>
         </div>
-        <button class="cart-item-remove" aria-label="Remove ${p.name}">🗑</button>
+        <button class="cart-item-remove" title="Remove">🗑</button>
       </div>`;
   }).join("");
 
   container.querySelectorAll(".cart-item").forEach(row => {
     const id = Number(row.dataset.id);
-    row.querySelector("[data-action='dec']").addEventListener("click", () => updateCartQty(id, -1));
-    row.querySelector("[data-action='inc']").addEventListener("click", () => updateCartQty(id, +1));
+    row.querySelector("[data-action='dec']").addEventListener("click", () => updateCartQty(id,-1));
+    row.querySelector("[data-action='inc']").addEventListener("click", () => updateCartQty(id,+1));
     row.querySelector(".cart-item-remove").addEventListener("click", () => removeFromCart(id));
   });
 
   document.getElementById("cartSubtotal").textContent = formatPrice(subtotal);
-  document.getElementById("cartDelivery").textContent =
-    delivery === 0 ? "FREE 🎉" : formatPrice(delivery);
-  document.getElementById("cartTotal").textContent = formatPrice(total);
+  document.getElementById("cartDelivery").textContent = delivery === 0 ? "FREE 🎉" : formatPrice(delivery);
+  document.getElementById("cartTotal").textContent    = formatPrice(total);
+  document.getElementById("addressTotal").textContent = formatPrice(total);
+}
+
+// ─────────────────────────────────────────────────────────────────
+// CART STEPS
+// ─────────────────────────────────────────────────────────────────
+function goToStep(step) {
+  state.cartStep = step;
+  const isCart    = step === "cart";
+  document.getElementById("cartStepCart").classList.toggle("hidden", !isCart);
+  document.getElementById("cartStepAddress").classList.toggle("hidden", isCart);
+  document.getElementById("stepDot1").classList.toggle("active", isCart);
+  document.getElementById("stepDot1").classList.toggle("done", !isCart);
+  document.getElementById("stepDot2").classList.toggle("active", !isCart);
+  document.querySelector(".step-line").classList.toggle("active", !isCart);
+
+  // Update address total
+  const sub = getCartSubtotal();
+  document.getElementById("addressTotal").textContent = formatPrice(sub + getDeliveryFee(sub));
+}
+
+// ─────────────────────────────────────────────────────────────────
+// ADDRESS FORM
+// ─────────────────────────────────────────────────────────────────
+function validateAddress() {
+  const fields = [
+    { id:"fieldName",    err:"errName",    label:"Full name" },
+    { id:"fieldPhone",   err:"errPhone",   label:"Phone number" },
+    { id:"fieldAddress", err:"errAddress", label:"Address" },
+    { id:"fieldCity",    err:"errCity",    label:"City" },
+    { id:"fieldCountry", err:"errCountry", label:"Country" },
+  ];
+  let valid = true;
+  fields.forEach(f => {
+    const el  = document.getElementById(f.id);
+    const err = document.getElementById(f.err);
+    const val = el.value.trim();
+    if (!val) {
+      el.classList.add("error");
+      err.textContent = `${f.label} is required`;
+      valid = false;
+    } else {
+      el.classList.remove("error");
+      err.textContent = "";
+    }
+  });
+  return valid;
+}
+
+function getAddressValues() {
+  return {
+    fullName:    document.getElementById("fieldName").value.trim(),
+    phone:       document.getElementById("fieldPhone").value.trim(),
+    addressLine1:document.getElementById("fieldAddress").value.trim(),
+    addressLine2:document.getElementById("fieldAddress2").value.trim(),
+    city:        document.getElementById("fieldCity").value.trim(),
+    country:     document.getElementById("fieldCountry").value.trim(),
+    notes:       document.getElementById("fieldNotes").value.trim(),
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -863,10 +709,10 @@ function toggleWishlist(id) {
   if (idx === -1) {
     state.wishlist.push(id);
     const p = PRODUCTS.find(x => x.id === id);
-    showToast(`💝 "${p.name}" saved to wishlist`);
+    if (p) showToast(`💝 "${p.name}" saved to wishlist`);
     haptic.success();
   } else {
-    state.wishlist.splice(idx, 1);
+    state.wishlist.splice(idx,1);
     haptic.light();
   }
   persistWishlist();
@@ -883,49 +729,25 @@ function updateWishlistCount() {
 function renderWishlistItems() {
   const container = document.getElementById("wishlistItems");
   const empty     = document.getElementById("wishlistEmpty");
-
-  if (!state.wishlist.length) {
-    container.innerHTML = "";
-    empty.classList.remove("hidden");
-    return;
-  }
-
+  if (!state.wishlist.length) { container.innerHTML = ""; empty.classList.remove("hidden"); return; }
   empty.classList.add("hidden");
-  container.innerHTML = state.wishlist.map(id => {
-    const p = PRODUCTS.find(x => x.id === id);
-    if (!p) return "";
-    return productCardHTML(p);
-  }).join("");
-
+  const items = state.wishlist.map(id => PRODUCTS.find(x => x.id === id)).filter(Boolean);
+  container.innerHTML = items.map(p => productCardHTML(p)).join("");
   container.querySelectorAll(".product-card").forEach(card => {
     const id = Number(card.dataset.id);
-
-    card.querySelector(".btn-add-cart").addEventListener("click", e => {
-      e.stopPropagation();
-      haptic.medium();
-      addToCart(id, 1);
-      renderWishlistItems();
-    });
-
-    card.querySelector(".wishlist-toggle").addEventListener("click", e => {
-      e.stopPropagation();
-      toggleWishlist(id);
-      renderWishlistItems();
-    });
-
+    card.querySelector(".btn-add-cart").addEventListener("click", e => { e.stopPropagation(); haptic.medium(); addToCart(id,1); renderWishlistItems(); });
+    card.querySelector(".wishlist-toggle").addEventListener("click", e => { e.stopPropagation(); toggleWishlist(id); renderWishlistItems(); });
     card.addEventListener("click", () => openProductModal(id));
   });
 }
 
 // ─────────────────────────────────────────────────────────────────
-// OVERLAYS (open / close)
+// OVERLAYS
 // ─────────────────────────────────────────────────────────────────
-const OVERLAYS = ["productModal", "cartPanel", "wishlistPanel"];
+const OVERLAYS = ["productModal","cartPanel","wishlistPanel","confirmOverlay"];
 
 function openOverlay(id) {
-  OVERLAYS.forEach(oid => {
-    document.getElementById(oid).classList.toggle("open", oid === id);
-  });
+  OVERLAYS.forEach(oid => document.getElementById(oid).classList.toggle("open", oid === id));
   document.body.style.overflow = "hidden";
 }
 
@@ -933,8 +755,35 @@ function closeAllOverlays() {
   OVERLAYS.forEach(oid => document.getElementById(oid).classList.remove("open"));
   document.body.style.overflow = "";
   state.currentProduct = null;
+  goToStep("cart");
   if (tg) tg.BackButton.hide();
   syncTelegramMainButton();
+}
+
+// ─────────────────────────────────────────────────────────────────
+// ORDER CONFIRMATION OVERLAY
+// ─────────────────────────────────────────────────────────────────
+function showConfirmation(order) {
+  const sub      = order.subtotal;
+  const delivery = order.delivery;
+  const short    = order.orderId.slice(-8);
+  const itemsStr = order.items.map(i => `${i.name} × ${i.qty}`).join(", ");
+
+  document.getElementById("confirmDetails").innerHTML = `
+    <div class="confirm-row"><span>Order ID</span>     <strong>#${short}</strong></div>
+    <div class="confirm-row"><span>Items</span>        <strong>${order.items.length} item${order.items.length > 1 ? "s" : ""}</strong></div>
+    <div class="confirm-row"><span>Subtotal</span>     <strong>${formatPrice(sub)}</strong></div>
+    <div class="confirm-row"><span>Delivery</span>     <strong>${delivery === 0 ? "FREE 🎉" : formatPrice(delivery)}</strong></div>
+    <div class="confirm-row"><span>Total Paid</span>   <strong style="color:var(--accent);font-size:16px">${formatPrice(order.total)}</strong></div>
+    <div class="confirm-row"><span>Ship to</span>      <strong>${order.address.fullName}, ${order.address.city}</strong></div>`;
+
+  openOverlay("confirmOverlay");
+
+  // Reset checkmark animation
+  const check = document.getElementById("confirmCheck");
+  check.style.animation = "none";
+  check.offsetHeight; // reflow
+  check.style.animation = "";
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -942,12 +791,12 @@ function closeAllOverlays() {
 // ─────────────────────────────────────────────────────────────────
 function syncTelegramMainButton() {
   if (!isInTelegram || !tg?.MainButton) return;
-  const count = state.cart.reduce((s, c) => s + c.qty, 0);
+  const count = state.cart.reduce((s,c) => s + c.qty, 0);
   if (count > 0) {
-    const total = getCartSubtotal() + getDeliveryFee(getCartSubtotal());
-    tg.MainButton.setText(`Checkout · ${formatPrice(total)} (${count} item${count > 1 ? "s" : ""})`);
+    const sub   = getCartSubtotal();
+    const total = sub + getDeliveryFee(sub);
+    tg.MainButton.setText(`Checkout · ${formatPrice(total)} (${count} item${count>1?"s":""})`);
     tg.MainButton.show();
-    tg.MainButton.color = tg.themeParams?.button_color ?? "#0a7cff";
   } else {
     tg.MainButton.hide();
   }
@@ -958,34 +807,30 @@ function syncTelegramMainButton() {
 // ─────────────────────────────────────────────────────────────────
 function checkout() {
   if (!state.cart.length) return;
+  if (!validateAddress()) { haptic.error(); showToast("⚠️ Please fill in all required fields", 2500); return; }
 
   haptic.success();
 
+  const address  = getAddressValues();
   const subtotal = getCartSubtotal();
   const delivery = getDeliveryFee(subtotal);
   const total    = subtotal + delivery;
 
   const items = state.cart.map(c => {
     const p = PRODUCTS.find(x => x.id === c.id);
-    return {
-      id:        p.id,
-      name:      p.name,
-      category:  p.category,
-      price:     p.price,
-      qty:       c.qty,
-      lineTotal: +(p.price * c.qty).toFixed(2),
-    };
+    return { id:p.id, name:p.name, category:p.category, price:p.price, qty:c.qty, lineTotal:+(p.price*c.qty).toFixed(2) };
   });
 
   const order = {
     orderId:   `ORD-${Date.now()}`,
     timestamp: new Date().toISOString(),
     customer: {
-      telegramId:   tg?.initDataUnsafe?.user?.id        ?? null,
-      firstName:    tg?.initDataUnsafe?.user?.first_name ?? "Guest",
-      lastName:     tg?.initDataUnsafe?.user?.last_name  ?? "",
-      username:     tg?.initDataUnsafe?.user?.username   ?? null,
+      telegramId: tg?.initDataUnsafe?.user?.id         ?? null,
+      firstName:  tg?.initDataUnsafe?.user?.first_name ?? address.fullName,
+      lastName:   tg?.initDataUnsafe?.user?.last_name  ?? "",
+      username:   tg?.initDataUnsafe?.user?.username   ?? null,
     },
+    address,
     items,
     subtotal: +subtotal.toFixed(2),
     delivery: +delivery.toFixed(2),
@@ -993,95 +838,65 @@ function checkout() {
     currency: CONFIG.currency,
   };
 
-  // Disable button to prevent double-submit
   const btn = document.getElementById("checkoutBtn");
   if (btn) { btn.disabled = true; btn.textContent = "Placing order…"; }
 
-  const webhookReady = CONFIG.webhookUrl &&
-                       CONFIG.webhookUrl !== "PASTE_YOUR_APPS_SCRIPT_URL_HERE";
+  const webhookReady = CONFIG.webhookUrl && CONFIG.webhookUrl !== "PASTE_YOUR_APPS_SCRIPT_URL_HERE";
+
+  const afterOrder = (ok) => {
+    if (btn) { btn.disabled = false; btn.textContent = "Place Order"; }
+    if (!ok) { haptic.error(); showToast("⚠️ Could not place order. Please try again.", 3000); return; }
+
+    // Clear cart
+    state.cart = [];
+    persistCart();
+    updateCartCount();
+    renderProducts();
+    closeAllOverlays();
+    syncTelegramMainButton();
+
+    // Show confirmation
+    showConfirmation(order);
+  };
 
   if (webhookReady) {
-    // POST to Google Apps Script → saves to Sheet + notifies seller + buyer
     fetch(CONFIG.webhookUrl, {
-      method:  "POST",
-      headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify(order),
+      method: "POST",
+      headers: { "Content-Type":"application/json" },
+      body: JSON.stringify(order),
     })
     .then(r => r.json())
-    .then(res => {
-      if (res.ok) {
-        onOrderSuccess(order);
-      } else {
-        onOrderError(btn, res.error);
-      }
-    })
-    .catch(err => {
-      // Webhook failed — still confirm locally so user isn't left hanging
-      console.warn("Webhook error (order may still have saved):", err);
-      onOrderSuccess(order);
-    });
+    .then(res => afterOrder(res.ok))
+    .catch(err => { console.warn("Webhook error:", err); afterOrder(true); }); // still confirm locally
   } else {
-    // Demo mode — no webhook configured yet
-    console.log("📦 Order (demo):", order);
-    setTimeout(() => onOrderSuccess(order), 600);
+    console.log("📦 Order (demo mode):", order);
+    setTimeout(() => afterOrder(true), 700);
   }
 
-  // Also send via Telegram sendData when inside Telegram (bot receives it too)
-  if (isInTelegram) {
-    tg.sendData(JSON.stringify(order));
-  }
-}
-
-function onOrderSuccess(order) {
-  state.cart = [];
-  persistCart();
-  updateCartCount();
-  renderCartItems();
-  renderProducts();
-  closeAllOverlays();
-  syncTelegramMainButton();
-
-  const shortId = order.orderId.slice(-8);
-  showToast(`✅ Order #${shortId} placed! Check Telegram for confirmation.`, 3500);
-
-  const btn = document.getElementById("checkoutBtn");
-  if (btn) { btn.disabled = false; btn.textContent = "Proceed to Checkout"; }
-}
-
-function onOrderError(btn, errorMsg) {
-  if (btn) { btn.disabled = false; btn.textContent = "Proceed to Checkout"; }
-  haptic.error();
-  showToast("⚠️ Could not place order. Please try again.", 3000);
-  console.error("Order error:", errorMsg);
+  if (isInTelegram) tg.sendData(JSON.stringify(order));
 }
 
 // ─────────────────────────────────────────────────────────────────
-// SEARCH
+// SEARCH & SORT
 // ─────────────────────────────────────────────────────────────────
 function setupSearch() {
   const input = document.getElementById("searchInput");
   const clear = document.getElementById("clearSearch");
-
-  let debounceTimer;
+  let timer;
   input.addEventListener("input", () => {
     state.searchQuery = input.value.trim();
     clear.classList.toggle("hidden", !state.searchQuery);
-    clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(renderProducts, 220);
+    clearTimeout(timer);
+    timer = setTimeout(renderProducts, 220);
   });
-
   clear.addEventListener("click", () => {
-    input.value       = "";
-    state.searchQuery = "";
+    input.value = ""; state.searchQuery = "";
     clear.classList.add("hidden");
     input.focus();
     renderProducts();
   });
 }
 
-// ─────────────────────────────────────────────────────────────────
-// SORT
-// ─────────────────────────────────────────────────────────────────
 function setupSort() {
   document.getElementById("sortSelect").addEventListener("change", e => {
     state.sortBy = e.target.value;
@@ -1090,89 +905,83 @@ function setupSort() {
   });
 }
 
-// ─────────────────────────────────────────────────────────────────
-// RESET FILTERS (called from empty-state HTML)
-// ─────────────────────────────────────────────────────────────────
 function resetFilters() {
-  state.searchQuery     = "";
-  state.activeCategory  = "all";
+  state.searchQuery = ""; state.activeCategory = "all";
   document.getElementById("searchInput").value = "";
   document.getElementById("clearSearch").classList.add("hidden");
-  document.querySelectorAll(".cat-chip").forEach(b => {
-    b.classList.toggle("active", b.dataset.cat === "all");
-  });
+  document.querySelectorAll(".cat-chip").forEach(b => b.classList.toggle("active", b.dataset.cat === "all"));
   renderProducts();
 }
-
-// Make resetFilters globally accessible (called from HTML onclick)
 window.resetFilters = resetFilters;
-
-// ─────────────────────────────────────────────────────────────────
-// SCROLL — sticky header shadow
-// ─────────────────────────────────────────────────────────────────
-window.addEventListener("scroll", () => {
-  document.getElementById("header").classList.toggle("scrolled", window.scrollY > 8);
-}, { passive: true });
 
 // ─────────────────────────────────────────────────────────────────
 // FORMAT HELPERS
 // ─────────────────────────────────────────────────────────────────
-function formatPrice(n) {
-  return CONFIG.currency + n.toFixed(2);
-}
-
-function formatNumber(n) {
-  return n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n);
-}
+function formatPrice(n)  { return CONFIG.currency + n.toFixed(2); }
+function formatNumber(n) { return n >= 1000 ? (n/1000).toFixed(1)+"k" : String(n); }
 
 // ─────────────────────────────────────────────────────────────────
 // EVENT BINDINGS
 // ─────────────────────────────────────────────────────────────────
 function bindEvents() {
-  // Header buttons
+  // Header
   document.getElementById("cartBtn").addEventListener("click", () => {
-    haptic.light();
-    renderCartItems();
-    openOverlay("cartPanel");
+    haptic.light(); renderCartItems(); goToStep("cart"); openOverlay("cartPanel");
   });
-
   document.getElementById("wishlistBtn").addEventListener("click", () => {
-    haptic.light();
-    renderWishlistItems();
-    openOverlay("wishlistPanel");
+    haptic.light(); renderWishlistItems(); openOverlay("wishlistPanel");
   });
 
   // Close buttons
   document.getElementById("closeProductModal").addEventListener("click", closeAllOverlays);
   document.getElementById("closeCart").addEventListener("click", closeAllOverlays);
+  document.getElementById("closeCartAddress").addEventListener("click", closeAllOverlays);
   document.getElementById("closeWishlist").addEventListener("click", closeAllOverlays);
+  document.getElementById("closeConfirmBtn").addEventListener("click", closeAllOverlays);
 
-  // Checkout button (in cart panel)
+  // Cart step navigation
+  document.getElementById("goToAddressBtn").addEventListener("click", () => {
+    if (!state.cart.length) return;
+    haptic.light(); goToStep("address");
+  });
+  document.getElementById("backToCartBtn").addEventListener("click", () => {
+    haptic.light(); goToStep("cart");
+  });
+
+  // Place order
   document.getElementById("checkoutBtn").addEventListener("click", checkout);
 
-  // Telegram MainButton checkout
-  if (tg?.MainButton) {
-    tg.MainButton.onClick(checkout);
+  // Telegram MainButton
+  if (isInTelegram && tg?.MainButton) {
+    tg.MainButton.onClick(() => { renderCartItems(); goToStep("cart"); openOverlay("cartPanel"); });
   }
 
-  // Overlay backdrop tap to close
+  // Backdrop tap to close
   OVERLAYS.forEach(id => {
     document.getElementById(id).addEventListener("click", e => {
       if (e.target === e.currentTarget) closeAllOverlays();
     });
   });
 
-  // Keyboard: Escape closes overlay
-  document.addEventListener("keydown", e => {
-    if (e.key === "Escape") closeAllOverlays();
-  });
+  // Scroll shadow
+  window.addEventListener("scroll", () => {
+    document.getElementById("header").classList.toggle("scrolled", window.scrollY > 8);
+  }, { passive:true });
+
+  // Escape key
+  document.addEventListener("keydown", e => { if (e.key === "Escape") closeAllOverlays(); });
 }
 
 // ─────────────────────────────────────────────────────────────────
 // INIT
 // ─────────────────────────────────────────────────────────────────
-function init() {
+async function init() {
   applyTheme();
+  showSkeleton();
+
+  await loadData();
+
+  hideSkeleton();
   renderCarousel();
   renderCategories();
   renderProducts();
@@ -1183,10 +992,7 @@ function init() {
   bindEvents();
   syncTelegramMainButton();
 
-  console.log(
-    "%cTG Store ready 🛍️",
-    "color:#0a84ff;font-size:14px;font-weight:bold;"
-  );
+  console.log("%cTG Store v3 ready 🛍️", "color:#0a84ff;font-size:14px;font-weight:bold;");
 }
 
 document.addEventListener("DOMContentLoaded", init);

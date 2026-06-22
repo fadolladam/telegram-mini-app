@@ -23,7 +23,7 @@ const CONFIG = {
   localStorageCartKey:   "tgstore_cart_v1",
   localStorageWishKey:   "tgstore_wish_v1",
   // Your Google Apps Script Web App URL (paste after deploying)
-  webhookUrl:            "PASTE_YOUR_APPS_SCRIPT_URL_HERE",
+  webhookUrl:            "https://script.google.com/macros/s/AKfycbxEb5HQrneJDXcQW0DTYOO69_Wya09-dR6QxBNsiKLNz92mqzggEo6f8stDxaQdqDcp/exec",
   // Google Sheets CSV URLs — must be published to web first
   // File → Share → Publish to web → Sheet → CSV → Publish
   sheetsProducts: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ4QXMPP5Tp89rmnOolgZIZhOHLSteRMVcpeeju0UfH05FHrpyp1y9KezHYpcGlAQ/pub?gid=1932103623&single=true&output=csv",

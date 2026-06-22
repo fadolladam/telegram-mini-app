@@ -18,6 +18,8 @@ const CONFIG = {
   carouselInterval:      4500,    // ms between auto-slides
   localStorageCartKey:   "tgstore_cart_v1",
   localStorageWishKey:   "tgstore_wish_v1",
+  // Paste your Google Apps Script Web App URL here after deploying
+  webhookUrl:            "PASTE_YOUR_APPS_SCRIPT_URL_HERE",
 };
 
 // ─────────────────────────────────────────────────────────────────
@@ -979,7 +981,7 @@ function checkout() {
     orderId:   `ORD-${Date.now()}`,
     timestamp: new Date().toISOString(),
     customer: {
-      telegramId:   tg?.initDataUnsafe?.user?.id       ?? null,
+      telegramId:   tg?.initDataUnsafe?.user?.id        ?? null,
       firstName:    tg?.initDataUnsafe?.user?.first_name ?? "Guest",
       lastName:     tg?.initDataUnsafe?.user?.last_name  ?? "",
       username:     tg?.initDataUnsafe?.user?.username   ?? null,
@@ -991,29 +993,66 @@ function checkout() {
     currency: CONFIG.currency,
   };
 
-  if (isInTelegram) {
-    // Send JSON order to your Telegram bot backend
-    tg.sendData(JSON.stringify(order));
-  } else {
-    // Browser fallback: show order summary then clear cart
-    console.log("📦 Order:", order);
-    alert(
-      `Order placed! ✅\n\n` +
-      `${items.length} item(s)\n` +
-      `Subtotal: ${formatPrice(subtotal)}\n` +
-      `Delivery: ${delivery === 0 ? "FREE" : formatPrice(delivery)}\n` +
-      `Total: ${formatPrice(total)}\n\n` +
-      `Order ID: ${order.orderId}`
-    );
+  // Disable button to prevent double-submit
+  const btn = document.getElementById("checkoutBtn");
+  if (btn) { btn.disabled = true; btn.textContent = "Placing order…"; }
 
-    state.cart = [];
-    persistCart();
-    updateCartCount();
-    renderCartItems();
-    renderProducts();
-    closeAllOverlays();
-    showToast("✅ Order placed successfully!");
+  const webhookReady = CONFIG.webhookUrl &&
+                       CONFIG.webhookUrl !== "PASTE_YOUR_APPS_SCRIPT_URL_HERE";
+
+  if (webhookReady) {
+    // POST to Google Apps Script → saves to Sheet + notifies seller + buyer
+    fetch(CONFIG.webhookUrl, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify(order),
+    })
+    .then(r => r.json())
+    .then(res => {
+      if (res.ok) {
+        onOrderSuccess(order);
+      } else {
+        onOrderError(btn, res.error);
+      }
+    })
+    .catch(err => {
+      // Webhook failed — still confirm locally so user isn't left hanging
+      console.warn("Webhook error (order may still have saved):", err);
+      onOrderSuccess(order);
+    });
+  } else {
+    // Demo mode — no webhook configured yet
+    console.log("📦 Order (demo):", order);
+    setTimeout(() => onOrderSuccess(order), 600);
   }
+
+  // Also send via Telegram sendData when inside Telegram (bot receives it too)
+  if (isInTelegram) {
+    tg.sendData(JSON.stringify(order));
+  }
+}
+
+function onOrderSuccess(order) {
+  state.cart = [];
+  persistCart();
+  updateCartCount();
+  renderCartItems();
+  renderProducts();
+  closeAllOverlays();
+  syncTelegramMainButton();
+
+  const shortId = order.orderId.slice(-8);
+  showToast(`✅ Order #${shortId} placed! Check Telegram for confirmation.`, 3500);
+
+  const btn = document.getElementById("checkoutBtn");
+  if (btn) { btn.disabled = false; btn.textContent = "Proceed to Checkout"; }
+}
+
+function onOrderError(btn, errorMsg) {
+  if (btn) { btn.disabled = false; btn.textContent = "Proceed to Checkout"; }
+  haptic.error();
+  showToast("⚠️ Could not place order. Please try again.", 3000);
+  console.error("Order error:", errorMsg);
 }
 
 // ─────────────────────────────────────────────────────────────────

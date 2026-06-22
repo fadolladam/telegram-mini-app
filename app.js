@@ -306,10 +306,13 @@ const PRODUCTS = [
 // ─────────────────────────────────────────────────────────────────
 const tg = window.Telegram?.WebApp ?? null;
 
+// True only when launched inside an actual Telegram client
+const isInTelegram = !!(tg && tg.initData && tg.initData.length > 0);
+
 if (tg) {
   tg.ready();
   tg.expand();
-  tg.enableClosingConfirmation();
+  if (isInTelegram) tg.enableClosingConfirmation();
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -936,7 +939,7 @@ function closeAllOverlays() {
 // TELEGRAM MAIN BUTTON
 // ─────────────────────────────────────────────────────────────────
 function syncTelegramMainButton() {
-  if (!tg?.MainButton) return;
+  if (!isInTelegram || !tg?.MainButton) return;
   const count = state.cart.reduce((s, c) => s + c.qty, 0);
   if (count > 0) {
     const total = getCartSubtotal() + getDeliveryFee(getCartSubtotal());
@@ -988,11 +991,11 @@ function checkout() {
     currency: CONFIG.currency,
   };
 
-  if (tg?.sendData) {
+  if (isInTelegram) {
     // Send JSON order to your Telegram bot backend
     tg.sendData(JSON.stringify(order));
   } else {
-    // Browser fallback: log + alert
+    // Browser fallback: show order summary then clear cart
     console.log("📦 Order:", order);
     alert(
       `Order placed! ✅\n\n` +
@@ -1003,7 +1006,6 @@ function checkout() {
       `Order ID: ${order.orderId}`
     );
 
-    // Clear cart after successful checkout
     state.cart = [];
     persistCart();
     updateCartCount();

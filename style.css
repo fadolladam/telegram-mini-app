@@ -1526,6 +1526,21 @@ a { color: var(--accent); text-decoration: none; }
   line-height: 1.5;
 }
 
+.btn-close-app {
+  width: 100%;
+  padding: 14px;
+  border-radius: var(--radius-md);
+  border: 1.5px solid var(--border);
+  background: transparent;
+  color: var(--text-sub);
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  margin-top: 10px;
+  transition: background var(--transition), color var(--transition);
+}
+.btn-close-app:active { background: var(--bg-input); }
+
 /* ── MODAL HERO IMAGE ───────────────────────────────────────────── */
 .modal-hero-img {
   width: 100%;

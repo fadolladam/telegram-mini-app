@@ -947,6 +947,10 @@ function bindEvents() {
   document.getElementById("closeCartAddress").addEventListener("click", closeAllOverlays);
   document.getElementById("closeWishlist").addEventListener("click", closeAllOverlays);
   document.getElementById("closeConfirmBtn").addEventListener("click", closeAllOverlays);
+  document.getElementById("closeAppBtn").addEventListener("click", () => {
+    haptic.light();
+    if (tg) { tg.close(); } else { closeAllOverlays(); }
+  });
 
   // Cart step navigation
   document.getElementById("goToAddressBtn").addEventListener("click", () => {

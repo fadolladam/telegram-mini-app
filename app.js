@@ -756,6 +756,36 @@ function closeAllOverlays() {
 // ─────────────────────────────────────────────────────────────────
 // ORDER CONFIRMATION OVERLAY
 // ─────────────────────────────────────────────────────────────────
+function showDeliveryLoading(callback) {
+  const overlay = document.getElementById("deliveryLoadingOverlay");
+  const status  = document.getElementById("deliveryStatus");
+  const pkg     = document.getElementById("stagePkg");
+  const door    = document.querySelector(".svv-door");
+  const van     = document.querySelector(".svg-van");
+
+  // Reset animations so replay works on subsequent orders
+  [pkg, door, van].forEach(el => { el.style.animation = "none"; });
+  pkg.offsetHeight; // force reflow
+  [pkg, door, van].forEach(el => { el.style.animation = ""; });
+
+  status.textContent = "Preparing your delivery…";
+  status.classList.remove("success");
+
+  overlay.classList.add("open");
+
+  // At 1.5s — change text to "Order placed!"
+  setTimeout(() => {
+    status.textContent = "Order placed! ✓";
+    status.classList.add("success");
+  }, 1500);
+
+  // At 2s — fade out overlay then show confirmation
+  setTimeout(() => {
+    overlay.classList.remove("open");
+    setTimeout(callback, 260);
+  }, 2000);
+}
+
 function showConfirmation(order) {
   const sub      = order.subtotal;
   const delivery = order.delivery;
@@ -831,14 +861,14 @@ function checkout() {
     currency: CONFIG.currency,
   };
 
-  // Close cart and show confirmation immediately — don't wait for GAS
+  // Close cart, clear it, then play delivery animation before confirmation
   closeAllOverlays();
   state.cart = [];
   persistCart();
   updateCartCount();
   renderProducts();
   syncTelegramMainButton();
-  showConfirmation(order);
+  showDeliveryLoading(() => showConfirmation(order));
 
   // Fire-and-forget: send order to GAS in background
   const webhookReady = CONFIG.webhookUrl && CONFIG.webhookUrl !== "PASTE_YOUR_APPS_SCRIPT_URL_HERE";

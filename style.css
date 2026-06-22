@@ -1541,6 +1541,126 @@ a { color: var(--accent); text-decoration: none; }
 }
 .btn-close-app:active { background: var(--bg-input); }
 
+/* ── ORDER DELIVERY LOADING ANIMATION ──────────────────────────── */
+.delivery-loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  background: rgba(0, 0, 0, 0.78);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+.delivery-loading-overlay.open {
+  opacity: 1;
+  pointer-events: all;
+}
+
+.delivery-scene {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px;
+}
+
+.van-stage-wrap {
+  position: relative;
+  width: 260px;
+  height: 80px;
+}
+
+/* 📦 Package — slides right into van door then fades inside */
+.stage-pkg {
+  position: absolute;
+  font-size: 28px;
+  left: 0;
+  top: 16px;
+  z-index: 1;
+  animation: pkgSlide 2s ease-in forwards;
+}
+
+/* SVG van illustration */
+.svg-van {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 190px;
+  height: 75px;
+  animation: vanBounce 2s forwards;
+  overflow: visible;
+}
+
+/* Van SVG element fills */
+.svv-body     { fill: #4A90D9; }
+.svv-interior { fill: rgba(0, 0, 0, 0.32); }
+.svv-door {
+  fill: #4A90D9;
+  transform-box: fill-box;
+  transform-origin: 100% 50%;   /* hinge at right edge → swings left-to-right closed */
+  transform: scaleX(0);
+  animation: doorSwing 2s ease-in-out forwards;
+}
+.svv-cab      { fill: #2D72B8; }
+.svv-glass    { fill: #B8DCEF; opacity: 0.92; }
+.svv-light    { fill: #FFD700; }
+.svv-chassis  { fill: #1a2332; }
+.svv-wheel {
+  fill: #1a2332;
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+  animation: wheelSpin 0.7s linear infinite;
+}
+.svv-hub {
+  fill: #8fa4b0;
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+  animation: wheelSpin 0.7s linear infinite;
+}
+
+.delivery-status {
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0.15px;
+  transition: color 0.4s ease;
+}
+.delivery-status.success { color: #6EE7A0; }
+
+/* ─── Keyframe animations ─── */
+
+/* Package slides right into door then disappears inside */
+@keyframes pkgSlide {
+  0%   { transform: translateX(0);    opacity: 1; }
+  42%  { transform: translateX(90px); opacity: 1; }
+  56%  { transform: translateX(90px); opacity: 0; }
+  100% { transform: translateX(90px); opacity: 0; }
+}
+
+/* Back door swings closed after package loads */
+@keyframes doorSwing {
+  0%,  46% { transform: scaleX(0); }
+  78%, 100% { transform: scaleX(1); }
+}
+
+/* Van bounces once — "loaded and ready" */
+@keyframes vanBounce {
+  0%,  62% { transform: translateY(0);   }
+  70%       { transform: translateY(-8px); }
+  78%       { transform: translateY(0);   }
+  85%       { transform: translateY(-4px); }
+  92%, 100% { transform: translateY(0);   }
+}
+
+@keyframes wheelSpin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
 /* ── MODAL HERO IMAGE ───────────────────────────────────────────── */
 .modal-hero-img {
   width: 100%;

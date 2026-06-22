@@ -320,6 +320,38 @@
   </div>
 </div>
 
+<!-- ORDER DELIVERY LOADING ══════════════════════════════════════ -->
+<div id="deliveryLoadingOverlay" class="delivery-loading-overlay" aria-live="polite" aria-label="Processing order">
+  <div class="delivery-scene">
+    <div class="van-stage-wrap">
+      <span class="stage-pkg" id="stagePkg">📦</span>
+      <svg class="svg-van" viewBox="0 0 190 75" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <!-- Cargo body -->
+        <rect class="svv-body"     x="25"  y="8"  width="88"  height="48" rx="3"/>
+        <!-- Open door interior (dark = inside van) -->
+        <rect class="svv-interior" x="25"  y="8"  width="25"  height="48" rx="3"/>
+        <!-- Door panel — animates closed after package loads -->
+        <rect class="svv-door"     x="25"  y="8"  width="25"  height="48" rx="3"/>
+        <!-- Cab -->
+        <rect class="svv-cab"      x="113" y="3"  width="52"  height="53" rx="5"/>
+        <!-- Windshield -->
+        <rect class="svv-glass"    x="118" y="8"  width="34"  height="26" rx="3"/>
+        <!-- Headlight -->
+        <rect class="svv-light"    x="157" y="43" width="9"   height="7"  rx="2"/>
+        <!-- Chassis -->
+        <rect class="svv-chassis"  x="24"  y="55" width="142" height="4"  rx="0"/>
+        <!-- Rear wheel -->
+        <circle class="svv-wheel"  cx="52"  cy="66" r="10"/>
+        <circle class="svv-hub"    cx="52"  cy="66" r="4"/>
+        <!-- Front wheel -->
+        <circle class="svv-wheel"  cx="146" cy="66" r="10"/>
+        <circle class="svv-hub"    cx="146" cy="66" r="4"/>
+      </svg>
+    </div>
+    <p class="delivery-status" id="deliveryStatus">Preparing your delivery…</p>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 

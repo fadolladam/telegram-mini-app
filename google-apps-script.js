@@ -422,7 +422,10 @@ const PAYMENT_QR_IMAGE = "https://cdn.jsdelivr.net/gh/bsthen/bsthen@main/khqr_ri
 
 function notifyBuyer(order) {
   const chatId = order.customer?.telegramId;
-  if (!chatId) return;
+  if (!chatId) {
+    logError("notifyBuyer", new Error("telegramId is null — buyer not in Telegram or initData missing"));
+    return;
+  }
 
   const addr      = order.address  || {};
   const cust      = order.customer || {};
@@ -431,42 +434,50 @@ function notifyBuyer(order) {
   const short     = order.orderId.slice(-10);
 
   const itemLines = (order.items || []).map(i =>
-    `• ${i.name} ×${i.qty} — ${order.currency}${Number(i.lineTotal).toFixed(2)}`
+    `${i.name} x${i.qty} - ${order.currency}${Number(i.lineTotal).toFixed(2)}`
   ).join("\n");
 
+  // Plain text caption — no Markdown to avoid parse errors
   const caption = [
-    `✅ *Order Confirmed!* 🎉`,
+    `✅ Order Confirmed! 🎉`,
     ``,
     `Hi ${firstName}! Your order has been placed.`,
     ``,
-    `📦 *Order:* \`#${short}\``,
-    `🕐 ${new Date(order.timestamp).toLocaleString()}`,
+    `Order: #${short}`,
+    `Time: ${new Date(order.timestamp).toLocaleString()}`,
     ``,
-    `🧾 *Items:*`,
+    `Items:`,
     itemLines,
     ``,
-    `💰 Subtotal: ${order.currency}${Number(order.subtotal).toFixed(2)}`,
-    `🚚 Delivery: ${order.delivery == 0 ? "FREE 🎉" : order.currency + Number(order.delivery).toFixed(2)}`,
-    `✅ *Total: ${order.currency}${Number(order.total).toFixed(2)}*`,
+    `Subtotal: ${order.currency}${Number(order.subtotal).toFixed(2)}`,
+    `Delivery: ${order.delivery == 0 ? "FREE" : order.currency + Number(order.delivery).toFixed(2)}`,
+    `Total: ${order.currency}${Number(order.total).toFixed(2)}`,
     ``,
-    `📍 ${addrLine || "—"}`,
-    addr.notes ? `📝 ${addr.notes}` : null,
+    `Ship to: ${addrLine || "—"}`,
+    addr.notes ? `Notes: ${addr.notes}` : null,
     ``,
-    `👆 Scan the QR code above to complete your payment. Thank you for shopping with us! 🛍️`,
+    `👆 Scan the QR code above to complete your payment.`,
+    `Thank you for shopping with us! 🛍️`,
   ].filter(l => l !== null).join("\n");
 
-  // Send QR payment image with order summary as caption (buyer only)
-  UrlFetchApp.fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
+  // Send QR payment image with order summary (buyer only)
+  const res = UrlFetchApp.fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
     method:      "post",
     contentType: "application/json",
     payload: JSON.stringify({
-      chat_id:    chatId,
-      photo:      PAYMENT_QR_IMAGE,
-      caption:    caption.slice(0, 1024), // Telegram caption limit
-      parse_mode: "Markdown",
+      chat_id: chatId,
+      photo:   PAYMENT_QR_IMAGE,
+      caption: caption.slice(0, 1024),
     }),
     muteHttpExceptions: true,
   });
+
+  const result = JSON.parse(res.getContentText());
+  if (!result.ok) {
+    logError("notifyBuyer sendPhoto", new Error(`Telegram error: ${result.description} | chatId: ${chatId}`));
+    // Fallback: send plain text if photo fails
+    sendTelegramMessage(chatId, caption);
+  }
 }
 
 // ─── WELCOME MESSAGE ──────────────────────────────────────────────────────────

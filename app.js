@@ -666,11 +666,8 @@ function goToStep(step) {
 // ─────────────────────────────────────────────────────────────────
 function validateAddress() {
   const fields = [
-    { id:"fieldName",    err:"errName",    label:"Full name" },
-    { id:"fieldPhone",   err:"errPhone",   label:"Phone number" },
-    { id:"fieldAddress", err:"errAddress", label:"Address" },
+    { id:"fieldAddress", err:"errAddress", label:"Street address" },
     { id:"fieldCity",    err:"errCity",    label:"City" },
-    { id:"fieldCountry", err:"errCountry", label:"Country" },
   ];
   let valid = true;
   fields.forEach(f => {
@@ -691,13 +688,9 @@ function validateAddress() {
 
 function getAddressValues() {
   return {
-    fullName:    document.getElementById("fieldName").value.trim(),
-    phone:       document.getElementById("fieldPhone").value.trim(),
-    addressLine1:document.getElementById("fieldAddress").value.trim(),
-    addressLine2:document.getElementById("fieldAddress2").value.trim(),
-    city:        document.getElementById("fieldCity").value.trim(),
-    country:     document.getElementById("fieldCountry").value.trim(),
-    notes:       document.getElementById("fieldNotes").value.trim(),
+    addressLine1: document.getElementById("fieldAddress").value.trim(),
+    city:         document.getElementById("fieldCity").value.trim(),
+    notes:        document.getElementById("fieldNotes").value.trim(),
   };
 }
 
@@ -775,7 +768,7 @@ function showConfirmation(order) {
     <div class="confirm-row"><span>Subtotal</span>     <strong>${formatPrice(sub)}</strong></div>
     <div class="confirm-row"><span>Delivery</span>     <strong>${delivery === 0 ? "FREE 🎉" : formatPrice(delivery)}</strong></div>
     <div class="confirm-row"><span>Total Paid</span>   <strong style="color:var(--accent);font-size:16px">${formatPrice(order.total)}</strong></div>
-    <div class="confirm-row"><span>Ship to</span>      <strong>${order.address.fullName}, ${order.address.city}</strong></div>`;
+    <div class="confirm-row"><span>Ship to</span>      <strong>${order.address.city}</strong></div>`;
 
   openOverlay("confirmOverlay");
 
@@ -826,7 +819,7 @@ function checkout() {
     timestamp: new Date().toISOString(),
     customer: {
       telegramId: tg?.initDataUnsafe?.user?.id         ?? null,
-      firstName:  tg?.initDataUnsafe?.user?.first_name ?? address.fullName,
+      firstName:  tg?.initDataUnsafe?.user?.first_name ?? "Guest",
       lastName:   tg?.initDataUnsafe?.user?.last_name  ?? "",
       username:   tg?.initDataUnsafe?.user?.username   ?? null,
     },
@@ -838,13 +831,12 @@ function checkout() {
     currency: CONFIG.currency,
   };
 
-  const btn = document.getElementById("checkoutBtn");
-  if (btn) { btn.disabled = true; btn.textContent = "Placing order…"; }
+  // Close cart immediately — prevents cart showing behind confirmation
+  closeAllOverlays();
 
   const webhookReady = CONFIG.webhookUrl && CONFIG.webhookUrl !== "PASTE_YOUR_APPS_SCRIPT_URL_HERE";
 
   const afterOrder = (ok) => {
-    if (btn) { btn.disabled = false; btn.textContent = "Place Order"; }
     if (!ok) { haptic.error(); showToast("⚠️ Could not place order. Please try again.", 3000); return; }
 
     // Clear cart
@@ -852,7 +844,6 @@ function checkout() {
     persistCart();
     updateCartCount();
     renderProducts();
-    closeAllOverlays();
     syncTelegramMainButton();
 
     // Show confirmation

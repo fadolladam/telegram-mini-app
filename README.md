@@ -146,7 +146,7 @@ git push -u origin main
 2. Import `fadolladam/telegram-mini-app`
 3. Framework: **Other** — leave everything default
 4. Click **Deploy** — done in ~30 seconds
-5. Get your HTTPS URL: `https://telegram-mini-app-xxx.vercel.app`
+5. Your live URL: `https://digitallicense.vercel.app`
 
 ---
 
@@ -209,7 +209,7 @@ Then push to GitHub — Vercel auto-redeploys.
 1. Open [@BotFather](https://t.me/BotFather)
 2. Send `/mybots` → select your bot
 3. **Bot Settings** → **Menu Button** → **Configure menu button**
-4. Paste your Vercel URL
+4. Paste: `https://digitallicense.vercel.app`
 5. Set label: `🛍️ Shop Now`
 
 ---

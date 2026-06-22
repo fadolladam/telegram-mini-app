@@ -46,14 +46,74 @@ function doPost(e) {
 function doGet(e) {
   const setup = e.parameter.setup;
   if (setup === "seller")  return setupSellerChatId();
+  if (setup === "polling") return setupPolling();
+  // Legacy — kept for reference but polling is preferred
   if (setup === "webhook") return registerWebhook();
-  // Legacy param
   if (setup === "true")    return setupSellerChatId();
   return jsonResponse({ ok: true, status: "TG Store webhook v4 running" });
 }
 
 // ─── SETUP ────────────────────────────────────────────────────────────────────
 
+// ── POLLING (recommended) ──────────────────────────────────────────────────
+// GAS returns 302 redirects which Telegram cannot follow, so webhook mode
+// fails. Use polling via a 1-minute time trigger instead.
+
+function setupPolling() {
+  // Delete existing webhook so updates queue for getUpdates
+  UrlFetchApp.fetch(`https://api.telegram.org/bot${BOT_TOKEN}/deleteWebhook`, {
+    method: "post", muteHttpExceptions: true,
+  });
+
+  // Fast-forward offset to skip already-queued updates (prevents welcome spam)
+  const data = JSON.parse(
+    UrlFetchApp.fetch(
+      `https://api.telegram.org/bot${BOT_TOKEN}/getUpdates?limit=100&offset=0`
+    ).getContentText()
+  );
+  if (data.ok && data.result.length) {
+    const latestId = data.result[data.result.length - 1].update_id;
+    PropertiesService.getScriptProperties().setProperty("UPDATE_OFFSET", String(latestId + 1));
+  }
+
+  return HtmlService.createHtmlOutput(`
+    <h2>✅ Polling mode ready!</h2>
+    <p>Webhook deleted. Now add a 1-minute time trigger:</p>
+    <ol>
+      <li>In Apps Script, click the <strong>⏰ Triggers</strong> icon (left sidebar)</li>
+      <li>Click <strong>+ Add Trigger</strong> (bottom right)</li>
+      <li>Function: <strong>processUpdates</strong></li>
+      <li>Event source: <strong>Time-driven</strong></li>
+      <li>Type: <strong>Minutes timer → Every 1 minute</strong></li>
+      <li>Save</li>
+    </ol>
+    <p>Every /start message will now be saved to the Customers sheet within 1 minute.</p>
+  `);
+}
+
+// Called by the 1-minute time trigger
+function processUpdates() {
+  const props  = PropertiesService.getScriptProperties();
+  const offset = parseInt(props.getProperty("UPDATE_OFFSET") || "0");
+
+  const data = JSON.parse(
+    UrlFetchApp.fetch(
+      `https://api.telegram.org/bot${BOT_TOKEN}/getUpdates?limit=100&offset=${offset}&timeout=0`
+    ).getContentText()
+  );
+
+  if (!data.ok || !data.result.length) return;
+
+  let newOffset = offset;
+  for (const update of data.result) {
+    newOffset = update.update_id + 1;
+    try { handleBotUpdate(update); } catch (err) { logError("processUpdates", err); }
+  }
+
+  PropertiesService.getScriptProperties().setProperty("UPDATE_OFFSET", String(newOffset));
+}
+
+// ── WEBHOOK (legacy — kept but not recommended for GAS) ───────────────────
 function registerWebhook() {
   const scriptUrl = ScriptApp.getService().getUrl();
   const res = JSON.parse(
@@ -63,9 +123,8 @@ function registerWebhook() {
   );
   return HtmlService.createHtmlOutput(
     res.ok
-      ? `<h2>✅ Webhook registered!</h2>
-         <p>Telegram will now send bot messages to this script.</p>
-         <p>Every user who sends /start will be saved to the <strong>Customers</strong> sheet.</p>`
+      ? `<h2>⚠️ Webhook set (but GAS 302 redirects may block it)</h2>
+         <p>Use <strong>?setup=polling</strong> instead for reliable delivery.</p>`
       : `<h2>❌ Failed: ${res.description}</h2>`
   );
 }

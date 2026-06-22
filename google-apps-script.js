@@ -13,7 +13,8 @@
  */
 
 const BOT_TOKEN       = "8844507711:AAF_K-m95-0J00k5Y_VAvdWJY8IeCA0ez5w";
-const ORDERS_SHEET_ID = "1eF9ISo5-rZpkMABFESpiPQzrB8qCs4KKlX3wI16rpTA";
+const ORDERS_SHEET_ID = "1zgYV3RaOvkNQwoRuMzcH0qenizyHpSDK";
+const ORDERS_GID      = 1772209504;
 const SELLER_CHAT_KEY = "SELLER_CHAT_ID";
 
 // ─── RECEIVE ORDER ────────────────────────────────────────────────
@@ -62,7 +63,7 @@ function setupSellerChatId() {
 // ─── SAVE ORDER TO GOOGLE SHEET ──────────────────────────────────
 function saveOrderToSheet(order) {
   const ss    = SpreadsheetApp.openById(ORDERS_SHEET_ID);
-  const sheet = ss.getSheets()[0];
+  const sheet = ss.getSheets().find(s => s.getSheetId() === ORDERS_GID) || ss.getSheets()[0];
 
   if (sheet.getLastRow() === 0) {
     sheet.appendRow([

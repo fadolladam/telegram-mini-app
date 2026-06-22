@@ -172,8 +172,17 @@ function handleBotUpdate(update) {
       languageCode: from.language_code || "",
       isPremium:    from.is_premium    || false,
     });
-    // Only send welcome once — on first /start, not on every repeat
-    if (isNew) sendWelcomeMessage(chatId, from.first_name);
+
+    // Hard guard: use a Script Property so welcome is sent exactly once
+    // even if old queued /start updates replay or sheet read is stale
+    const props      = PropertiesService.getScriptProperties();
+    const welcomeKey = `WEL_${from.id}`;
+    const alreadySent = props.getProperty(welcomeKey);
+
+    if (isNew && !alreadySent) {
+      props.setProperty(welcomeKey, "1");
+      sendWelcomeMessage(chatId, from.first_name);
+    }
   }
 
   // User tapped "Share Phone Number"
@@ -409,42 +418,55 @@ function notifySeller(order) {
 
 // ─── BUYER NOTIFICATION ───────────────────────────────────────────────────────
 
+const PAYMENT_QR_IMAGE = "https://cdn.jsdelivr.net/gh/bsthen/bsthen@main/khqr_riel.png";
+
 function notifyBuyer(order) {
   const chatId = order.customer?.telegramId;
   if (!chatId) return;
 
   const addr      = order.address  || {};
   const cust      = order.customer || {};
-  const firstName = cust.firstName || addr.fullName || "there";
-  const addrLine  = [addr.addressLine1, addr.city, addr.country].filter(Boolean).join(", ");
+  const firstName = cust.firstName || "there";
+  const addrLine  = [addr.addressLine1, addr.city].filter(Boolean).join(", ");
   const short     = order.orderId.slice(-10);
 
   const itemLines = (order.items || []).map(i =>
-    `  • ${i.name} × ${i.qty}  —  ${order.currency}${Number(i.lineTotal).toFixed(2)}`
+    `• ${i.name} ×${i.qty} — ${order.currency}${Number(i.lineTotal).toFixed(2)}`
   ).join("\n");
 
-  const lines = [
-    `✅ *Order Confirmed!*`,
+  const caption = [
+    `✅ *Order Confirmed!* 🎉`,
     ``,
-    `Hi ${firstName}! Your order has been placed successfully. 🎉`,
+    `Hi ${firstName}! Your order has been placed.`,
     ``,
-    `📦 *Order ID:* \`${short}\``,
-    `🕐 *Placed at:* ${new Date(order.timestamp).toLocaleString()}`,
+    `📦 *Order:* \`#${short}\``,
+    `🕐 ${new Date(order.timestamp).toLocaleString()}`,
     ``,
-    `🧾 *Your Items:*`,
+    `🧾 *Items:*`,
     itemLines,
     ``,
-    `💰 *Subtotal:* ${order.currency}${Number(order.subtotal).toFixed(2)}`,
-    `🚚 *Delivery:* ${order.delivery == 0 ? "FREE 🎉" : order.currency + Number(order.delivery).toFixed(2)}`,
-    `✅ *Total Paid: ${order.currency}${Number(order.total).toFixed(2)}*`,
+    `💰 Subtotal: ${order.currency}${Number(order.subtotal).toFixed(2)}`,
+    `🚚 Delivery: ${order.delivery == 0 ? "FREE 🎉" : order.currency + Number(order.delivery).toFixed(2)}`,
+    `✅ *Total: ${order.currency}${Number(order.total).toFixed(2)}*`,
     ``,
-    `📍 *Shipping to:* ${addrLine || "—"}`,
-    addr.notes ? `📝 *Your notes:* ${addr.notes}` : null,
+    `📍 ${addrLine || "—"}`,
+    addr.notes ? `📝 ${addr.notes}` : null,
     ``,
-    `We're preparing your order now. You'll receive updates here. Thank you for shopping with us! 🛍️`,
+    `👆 Scan the QR code above to complete your payment. Thank you for shopping with us! 🛍️`,
   ].filter(l => l !== null).join("\n");
 
-  sendTelegramMessage(chatId, lines);
+  // Send QR payment image with order summary as caption (buyer only)
+  UrlFetchApp.fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
+    method:      "post",
+    contentType: "application/json",
+    payload: JSON.stringify({
+      chat_id:    chatId,
+      photo:      PAYMENT_QR_IMAGE,
+      caption:    caption.slice(0, 1024), // Telegram caption limit
+      parse_mode: "Markdown",
+    }),
+    muteHttpExceptions: true,
+  });
 }
 
 // ─── WELCOME MESSAGE ──────────────────────────────────────────────────────────

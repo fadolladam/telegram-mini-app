@@ -12,7 +12,7 @@
  * 7. Visit [web-app-url]?setup=true once to register as seller
  */
 
-const BOT_TOKEN       = "PASTE_YOUR_BOT_TOKEN_HERE";
+const BOT_TOKEN       = "8844507711:AAF_K-m95-0J00k5Y_VAvdWJY8IeCA0ez5w";
 const ORDERS_SHEET_ID = "1eF9ISo5-rZpkMABFESpiPQzrB8qCs4KKlX3wI16rpTA";
 const SELLER_CHAT_KEY = "SELLER_CHAT_ID";
 

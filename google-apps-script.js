@@ -388,6 +388,13 @@ function notifySeller(order) {
     `  • ${i.name} × ${i.qty}  →  ${order.currency}${Number(i.lineTotal).toFixed(2)}`
   ).join("\n");
 
+  // Build contact line — username tap if available, chat ID deep link otherwise
+  const contactLine = cust.username
+    ? `💬 *Telegram:* @${cust.username}`
+    : cust.telegramId
+      ? `💬 *Contact Buyer:* [Tap to message](tg://user?id=${cust.telegramId})`
+      : `💬 *Telegram:* — (no Telegram ID)`;
+
   const lines = [
     `🛍️ *NEW ORDER RECEIVED!*`,
     ``,
@@ -396,7 +403,7 @@ function notifySeller(order) {
     ``,
     `━━━━━━━━━━ CUSTOMER ━━━━━━━━━━`,
     `👤 *Name:* ${buyerName}`,
-    `💬 *Telegram:* ${username}`,
+    contactLine,
     `🆔 *Chat ID:* ${cust.telegramId || "—"}`,
     `📞 *Phone:* ${phone}`,
     ``,

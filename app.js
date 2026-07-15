@@ -23,7 +23,7 @@ const CONFIG = {
   localStorageCartKey:   "tgstore_cart_v1",
   localStorageWishKey:   "tgstore_wish_v1",
   localStorageDataKey:   "tgstore_data_v1",
-  dataCacheTTL:          5 * 60 * 1000, // 5 minutes — stale-while-revalidate window
+  dataCacheTTL:          30 * 1000, // 30 seconds — stale-while-revalidate window
   // Your Google Apps Script Web App URL (paste after deploying)
   webhookUrl:            "https://script.google.com/macros/s/AKfycbxEb5HQrneJDXcQW0DTYOO69_Wya09-dR6QxBNsiKLNz92mqzggEo6f8stDxaQdqDcp/exec",
   // Google Sheets CSV URLs — must be published to web first

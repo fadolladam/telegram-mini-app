@@ -13,7 +13,7 @@ Live demo: `https://digitallicense.vercel.app`
 ### Buyer (User) Side
 | Feature | Details |
 |---|---|
-| Live product data | Fetched from Google Sheets CSV on every load |
+| Live product data | Fetched from Google Sheets CSV, cached client-side for 30s (stale-while-revalidate) so repeat visits load near-instantly |
 | Real product images | From `imageUrl` column in sheet — emoji fallback if missing |
 | Out of Stock | Card overlay + disabled button — set `stock=0` in sheet |
 | Stock-limited qty | Can't add more to cart than current stock |
@@ -195,24 +195,26 @@ git push -u origin main
 
 ### Step 5 — Set Up Google Apps Script (Order Webhook)
 
-#### 5.1 Create the script
+#### 5.1 Add your credentials as Script Properties (do this first — not in the code)
 1. Go to [script.google.com](https://script.google.com) → **New Project**
 2. Rename to **TG Store Webhook**
-3. Delete all default code
-4. Paste the full contents of `google-apps-script.js`
+3. **Project Settings (⚙️) → Script Properties → Add property**, twice:
+   - `BOT_TOKEN` = your bot token from @BotFather
+   - `SPREADSHEET_ID` = your spreadsheet ID (from the sheet URL)
 
-#### 5.2 Add your credentials
-Find these lines near the top and fill them in:
-```js
-const BOT_TOKEN      = "YOUR_BOT_TOKEN";       // from @BotFather
-const SPREADSHEET_ID = "YOUR_SPREADSHEET_ID";  // from the sheet URL
-```
+`BOT_TOKEN` and `SPREADSHEET_ID` are read from these properties at runtime (`PropertiesService.getScriptProperties()`) — they are **never hardcoded in `google-apps-script.js`**, so the file stays safe to commit to a public repo. If you skip this step before deploying, the bot will silently fail (empty token).
+
+#### 5.2 Paste the script
+1. Delete all default code in the project
+2. Paste the full contents of `google-apps-script.js`
 
 #### 5.3 Deploy as Web App
 1. Click **Deploy → New Deployment**
 2. Type: **Web App**
 3. Execute as: **Me** | Who has access: **Anyone**
 4. Click **Deploy** → authorize → copy the **Web App URL**
+
+> Redeploying later? Use **Manage Deployments → edit your existing deployment → New Version**, not "New Deployment" — that keeps the same URL so `app.js` never needs to change.
 
 #### 5.4 Paste the URL into app.js
 ```js
@@ -341,10 +343,21 @@ All orders land in the **Orders** sheet automatically. To manage them:
 
 ---
 
+## Security Notes
+
+- **`BOT_TOKEN` / `SPREADSHEET_ID`** live only in GAS Script Properties (Project Settings → Script Properties), never in `google-apps-script.js` itself — safe to keep this repo public.
+- **`webhookUrl` and the Sheets CSV links are visible in `app.js`** by design — the browser calls them directly, there's no backend to hide them behind. This is normal for a static-site + Google Sheets architecture, not a leak.
+- **`doPost` validates incoming order payloads** (`isValidOrder` in `google-apps-script.js`) — rejects malformed/incomplete submissions before they touch the Sheet or trigger any Telegram message.
+- **Not yet done:** prices/totals in an order are trusted as submitted by the browser — `doPost` doesn't re-check them against the live Products sheet. Low risk for a small single-seller store, but worth knowing before scaling up. See "What to Build Next" below.
+- If a bot token is ever exposed publicly (e.g. committed to git before this setup), rotating it in @BotFather is required — removing it from the code afterward does not invalidate an already-leaked token.
+
+---
+
 ## What to Build Next
 
 | Feature | Approach |
 |---|---|
+| Server-side price validation | In `doPost`, recompute each item's price from the Products sheet by `id` instead of trusting the submitted price/total |
 | Telegram Payments | Use Telegram's built-in Stars or provider payments API |
 | Order status → buyer | GAS custom menu: select order row → run script → sends Telegram to buyer |
 | Order history (buyer) | Save order IDs to localStorage, fetch from Sheets by ID |

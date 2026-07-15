@@ -3,17 +3,20 @@
  *
  * DEPLOY STEPS:
  * 1. Go to https://script.google.com → Open your project
- * 2. Replace ALL code with this file
- * 3. Deploy → New Deployment → Web App
+ * 2. Project Settings (⚙️) → Script Properties → Add:
+ *      BOT_TOKEN      = your bot token from @BotFather
+ *      SPREADSHEET_ID = your spreadsheet ID (from the sheet URL)
+ * 3. Replace ALL code with this file
+ * 4. Deploy → New Deployment → Web App
  *    Execute as: Me | Who has access: Anyone
- * 4. Copy the new Web App URL → paste into app.js as webhookUrl
- * 5. Visit [web-app-url]?setup=seller   → registers YOU as the admin
- * 6. Visit [web-app-url]?setup=webhook  → registers bot webhook (one-time)
- *    After step 6 every user who sends /start is saved to Customers sheet
+ * 5. Copy the new Web App URL → paste into app.js as webhookUrl
+ * 6. Visit [web-app-url]?setup=seller   → registers YOU as the admin
+ * 7. Visit [web-app-url]?setup=webhook  → registers bot webhook (one-time)
+ *    After step 7 every user who sends /start is saved to Customers sheet
  */
 
-const BOT_TOKEN            = "8844507711:AAF_K-m95-0J00k5Y_VAvdWJY8IeCA0ez5w";
-const SPREADSHEET_ID       = "1zgYV3RaOvkNQwoRuMzcH0qenizyHpSDK";
+const BOT_TOKEN            = PropertiesService.getScriptProperties().getProperty("BOT_TOKEN");
+const SPREADSHEET_ID       = PropertiesService.getScriptProperties().getProperty("SPREADSHEET_ID");
 const SELLER_CHAT_KEY      = "SELLER_CHAT_ID";
 
 const ORDERS_SHEET_NAME    = "Orders";
@@ -31,6 +34,10 @@ function doPost(e) {
     }
 
     // Order from the mini app — always has orderId
+    if (!isValidOrder(body)) {
+      logError("doPost", new Error("Rejected malformed order payload"));
+      return jsonResponse({ ok: false, error: "invalid order payload" });
+    }
     saveOrderToSheet(body);
     upsertCustomerFromOrder(body);
     notifySeller(body);
@@ -41,6 +48,18 @@ function doPost(e) {
     logError("doPost", err);
     return jsonResponse({ ok: false, error: err.message });
   }
+}
+
+// Rejects obviously malformed/spam payloads before they touch the Sheet or Telegram.
+// Does not re-price against the Products sheet — see README for that follow-up.
+function isValidOrder(body) {
+  if (!body || typeof body.orderId !== "string" || !body.orderId) return false;
+  if (!Array.isArray(body.items) || !body.items.length) return false;
+  if (!(Number(body.total) >= 0)) return false;
+  return body.items.every(i =>
+    i && typeof i.name === "string" && i.name.length > 0 && i.name.length <= 200 &&
+    Number(i.qty) > 0 && Number(i.price) >= 0
+  );
 }
 
 function doGet(e) {

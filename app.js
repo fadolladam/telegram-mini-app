@@ -22,6 +22,8 @@ const CONFIG = {
   carouselInterval:      4500,
   localStorageCartKey:   "tgstore_cart_v1",
   localStorageWishKey:   "tgstore_wish_v1",
+  localStorageDataKey:   "tgstore_data_v1",
+  dataCacheTTL:          5 * 60 * 1000, // 5 minutes — stale-while-revalidate window
   // Your Google Apps Script Web App URL (paste after deploying)
   webhookUrl:            "https://script.google.com/macros/s/AKfycbxEb5HQrneJDXcQW0DTYOO69_Wya09-dR6QxBNsiKLNz92mqzggEo6f8stDxaQdqDcp/exec",
   // Google Sheets CSV URLs — must be published to web first
@@ -198,12 +200,32 @@ async function loadData() {
     ]);
     PRODUCTS = pRows.map(csvToProduct).filter(p => p.id && p.name);
     BANNERS  = bRows.map(csvToBanner).filter(b => b.title);
+    saveCachedData();
     console.log(`✅ Loaded ${PRODUCTS.length} products and ${BANNERS.length} banners from Sheets`);
   } catch (err) {
     console.warn("⚠️ Could not load from Google Sheets — using fallback data.", err.message);
     PRODUCTS = [...FALLBACK_PRODUCTS];
     BANNERS  = [...FALLBACK_BANNERS];
   }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// DATA CACHE (stale-while-revalidate — instant repeat loads)
+// ─────────────────────────────────────────────────────────────────
+function loadCachedData() {
+  try {
+    const raw = localStorage.getItem(CONFIG.localStorageDataKey);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || !Array.isArray(parsed.products) || !Array.isArray(parsed.banners) || !parsed.ts) return null;
+    return parsed;
+  } catch { return null; }
+}
+
+function saveCachedData() {
+  try {
+    localStorage.setItem(CONFIG.localStorageDataKey, JSON.stringify({ products: PRODUCTS, banners: BANNERS, ts: Date.now() }));
+  } catch {}
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -1014,20 +1036,36 @@ function bindEvents() {
 // ─────────────────────────────────────────────────────────────────
 async function init() {
   applyTheme();
-  showSkeleton();
 
-  await loadData();
+  const cached  = loadCachedData();
+  const isFresh = cached && (Date.now() - cached.ts) < CONFIG.dataCacheTTL;
 
-  hideSkeleton();
-  renderCarousel();
-  renderCategories();
-  renderProducts();
+  if (cached) {
+    PRODUCTS = cached.products;
+    BANNERS  = cached.banners;
+    hideSkeleton();
+    renderCarousel();
+    renderCategories();
+    renderProducts();
+  } else {
+    showSkeleton();
+  }
+
   updateCartCount();
   updateWishlistCount();
   setupSearch();
   setupSort();
   bindEvents();
   syncTelegramMainButton();
+
+  if (!isFresh) {
+    await loadData();
+    hideSkeleton();
+    renderCarousel();
+    renderCategories();
+    renderProducts();
+    syncTelegramMainButton();
+  }
 
   console.log("%cTG Store v3 ready 🛍️", "color:#0a84ff;font-size:14px;font-weight:bold;");
 }

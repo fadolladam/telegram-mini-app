@@ -15,7 +15,7 @@
 // CONFIG
 // ─────────────────────────────────────────────────────────────────
 const CONFIG = {
-  storeName:             "TG Store",
+  storeName:             "Digital Store",
   currency:              "$",
   deliveryFee:           3.99,
   freeDeliveryThreshold: 50,
@@ -1035,6 +1035,8 @@ function bindEvents() {
 // INIT
 // ─────────────────────────────────────────────────────────────────
 async function init() {
+  document.title = CONFIG.storeName;
+  document.getElementById("storeName").textContent = CONFIG.storeName;
   applyTheme();
 
   const cached  = loadCachedData();
@@ -1067,7 +1069,7 @@ async function init() {
     syncTelegramMainButton();
   }
 
-  console.log("%cTG Store v3 ready 🛍️", "color:#0a84ff;font-size:14px;font-weight:bold;");
+  console.log(`%c${CONFIG.storeName} v3 ready 🛍️`, "color:#0a84ff;font-size:14px;font-weight:bold;");
 }
 
 document.addEventListener("DOMContentLoaded", init);

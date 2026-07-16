@@ -1,5 +1,5 @@
 /**
- * TG Store — Google Apps Script Webhook  (v4)
+ * Digital Store — Google Apps Script Webhook  (v4)
  *
  * DEPLOY STEPS:
  * 1. Go to https://script.google.com → Open your project
@@ -15,6 +15,7 @@
  *    After step 7 every user who sends /start is saved to Customers sheet
  */
 
+const STORE_NAME            = "Digital Store";
 const BOT_TOKEN            = PropertiesService.getScriptProperties().getProperty("BOT_TOKEN");
 const SPREADSHEET_ID       = PropertiesService.getScriptProperties().getProperty("SPREADSHEET_ID");
 const SELLER_CHAT_KEY      = "SELLER_CHAT_ID";
@@ -69,7 +70,7 @@ function doGet(e) {
   // Legacy — kept for reference but polling is preferred
   if (setup === "webhook") return registerWebhook();
   if (setup === "true")    return setupSellerChatId();
-  return jsonResponse({ ok: true, status: "TG Store webhook v4 running" });
+  return jsonResponse({ ok: true, status: `${STORE_NAME} webhook v4 running` });
 }
 
 // ─── SETUP ────────────────────────────────────────────────────────────────────
@@ -516,7 +517,7 @@ function sendWelcomeMessage(chatId, firstName) {
     payload: JSON.stringify({
       chat_id: chatId,
       text: [
-        `👋 *Welcome to TG Store, ${name}!*`,
+        `👋 *Welcome to ${STORE_NAME}, ${name}!*`,
         ``,
         `We're glad you're here. 🛍️`,
         ``,

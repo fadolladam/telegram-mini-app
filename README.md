@@ -321,6 +321,19 @@ app.js validates form → builds order object
 
 ---
 
+## Renaming the Store
+
+The store name is set from two single-source-of-truth constants — one per side, since the frontend and backend are separate deployments with no shared config file between them:
+
+| Where | Constant | Drives |
+|---|---|---|
+| `app.js` | `CONFIG.storeName` | Browser tab title + header name (set on load via JS — `index.html`'s hardcoded text is just the pre-JS fallback, kept in sync manually) |
+| `google-apps-script.js` | `STORE_NAME` | The bot's `/start` welcome message + the webhook's status response |
+
+Change each constant once, redeploy (push for `app.js`, paste + new deployment version for `google-apps-script.js`), and every place that shows the name updates with it. Currently set to **"Digital Store"**.
+
+---
+
 ## How to Update Products (No Code Needed)
 
 1. Open the Products Google Sheet

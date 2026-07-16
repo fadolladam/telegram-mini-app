@@ -88,6 +88,15 @@ if (tg) {
   tg.ready();
   tg.expand();
   if (isInTelegram) tg.enableClosingConfirmation();
+
+  // Telegram's in-app browser doesn't resize the page when the keyboard opens —
+  // it just overlays it. Track the real visible height ourselves so sheets can
+  // shrink to fit above the keyboard instead of being covered by it.
+  const applyViewportHeight = () => {
+    document.documentElement.style.setProperty("--tg-viewport-height", `${tg.viewportHeight}px`);
+  };
+  applyViewportHeight();
+  tg.onEvent("viewportChanged", applyViewportHeight);
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -836,6 +845,14 @@ function showConfirmation(order) {
 // ─────────────────────────────────────────────────────────────────
 function syncTelegramMainButton() {
   if (!isInTelegram || !tg?.MainButton) return;
+
+  // The cart sheet has its own in-page checkout button — showing Telegram's
+  // native MainButton at the same time makes it float on top of it.
+  if (document.getElementById("cartPanel").classList.contains("open")) {
+    tg.MainButton.hide();
+    return;
+  }
+
   const count = state.cart.reduce((s,c) => s + c.qty, 0);
   if (count > 0) {
     const sub   = getCartSubtotal();
